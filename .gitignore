@@ -1,0 +1,22 @@
+# Bytecode / caches
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local session log (regenerated at runtime)
+utils/gsbt_last_session.log
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.swo
