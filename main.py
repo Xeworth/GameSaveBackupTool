@@ -24,10 +24,12 @@ args = parser.parse_args()
 if args.sandbox:
     os.environ["GSBT_SANDBOX"] = "1"
 
+from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QIcon
 
-from config.app_config import SANDBOX
+from config.app_config import SANDBOX, settings_app_name
+from utils.i18n import install_ui_translators
 from ui.main_window import MainWindow
 
 # --- NEW: Helper function to find files when packaged ---
@@ -43,6 +45,10 @@ def resource_path(relative_path):
 
 def main():
     app = QApplication(sys.argv)
+    # Optional Qt translations (.qm); keep references on the app object
+    _qs = QSettings("MyCompany", settings_app_name())
+    app._gsbt_translators = install_ui_translators(app, _qs)  # noqa: SLF001
+
     icon_path = resource_path("gsbt.ico")
     app_icon = QIcon(icon_path)
     app.setWindowIcon(app_icon)

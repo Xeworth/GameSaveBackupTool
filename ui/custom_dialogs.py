@@ -30,6 +30,7 @@ from styles.manager import StyleManager
 from ui.settings_framed_tabs import SettingsFramedTabs
 from ui.seven_zip_install_worker import SevenZipInstallWorker
 from utils.seven_zip_install import consent_summary_text
+from utils.i18n import available_ui_language_codes
 
 class CustomCheckBox(QCheckBox):
     """Custom checkbox with visible checkmark and animation"""
@@ -266,8 +267,8 @@ class SettingsDialog(QDialog):
         # Fixed dialog dimensions
         self.setMinimumWidth(470)
         self.setMaximumWidth(470)
-        self.setMinimumHeight(430)
-        self.setMaximumHeight(430)
+        self.setMinimumHeight(510)
+        self.setMaximumHeight(510)
 
         _sm = StyleManager.instance()
         _sm.set_theme(normalize_ui_theme(self.settings.value("ui_theme", DEFAULT_UI_THEME, type=str)))
@@ -338,6 +339,13 @@ class SettingsDialog(QDialog):
         self.confirm_before_backup_checkbox.setChecked(self.settings.value("confirm_before_backup", False, type=bool))
         self.confirm_before_backup_checkbox.setToolTip("Show a confirmation dialog before starting a backup.")
         backup_form.addRow(self.confirm_before_backup_checkbox)
+
+        self.show_backup_estimate_checkbox = CustomCheckBox("Show backup size estimate before starting backup")
+        self.show_backup_estimate_checkbox.setChecked(self.settings.value("show_backup_estimate", True, type=bool))
+        self.show_backup_estimate_checkbox.setToolTip(
+            "Counts files and sizes under each save folder (and notes registry-only games) before copying."
+        )
+        backup_form.addRow(self.show_backup_estimate_checkbox)
 
         self.ask_compress_on_exit_checkbox = CustomCheckBox("Ask to compress backups when closing")
         self.ask_compress_on_exit_checkbox.setChecked(self.settings.value("ask_compress_on_exit", True, type=bool))
@@ -564,6 +572,23 @@ class SettingsDialog(QDialog):
         tidx = self.theme_combo.findData(saved_theme)
         self.theme_combo.setCurrentIndex(tidx if tidx >= 0 else 0)
         themes_form.addRow(QLabel("Application theme:"), self.theme_combo)
+
+        self.lang_combo = QComboBox()
+        self.lang_combo.setMinimumWidth(300)
+        for lbl, code in available_ui_language_codes():
+            self.lang_combo.addItem(lbl, code)
+        lang_cur = (self.settings.value("ui_language", "en", type=str) or "en").strip().lower()
+        lix = self.lang_combo.findData(lang_cur)
+        self.lang_combo.setCurrentIndex(lix if lix >= 0 else 0)
+        themes_form.addRow(QLabel("Language:"), self.lang_combo)
+
+        lang_hint = QLabel(
+            "Translations use Qt .qm files in a translations folder next to the app. "
+            "Only English is bundled for now; see utils/i18n.py to add locales."
+        )
+        lang_hint.setWordWrap(True)
+        lang_hint.setStyleSheet(f"color: {_sm.settings_muted_hint_color()}; font-size: 10px;")
+        themes_form.addRow("", lang_hint)
 
         theme_hint = QLabel(
             "Match system (Default) follows Settings → Personalization → Colors (Windows light or dark app mode). "
@@ -863,6 +888,7 @@ class SettingsDialog(QDialog):
         self.settings.setValue("minimize_to_tray", self.minimize_to_tray_checkbox.isChecked())
         self.settings.setValue("skip_not_found_games", self.skip_not_found_checkbox.isChecked())
         self.settings.setValue("confirm_before_backup", self.confirm_before_backup_checkbox.isChecked())
+        self.settings.setValue("show_backup_estimate", self.show_backup_estimate_checkbox.isChecked())
         self.settings.setValue("ask_compress_on_exit", self.ask_compress_on_exit_checkbox.isChecked())
         self.settings.setValue("backup_subfolder_per_game", self.backup_subfolder_per_game_checkbox.isChecked())
         self.settings.setValue("date_format", self.date_format_combo.currentData())
@@ -873,6 +899,7 @@ class SettingsDialog(QDialog):
         self.settings.setValue("compression_7z_threads", self.compression_7z_threads_spin.value())
         self.settings.setValue("compression_7z_path", self.compression_7z_path_input.text().strip())
         self.settings.setValue("ui_theme", self.theme_combo.currentData())
+        self.settings.setValue("ui_language", self.lang_combo.currentData())
 
         if old_startup_mode != new_startup_mode:
             self.set_startup(new_startup_mode)

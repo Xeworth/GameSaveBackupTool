@@ -645,6 +645,25 @@ class OptimizedSaveLocationFetcher:
         return None
 
 
+class BackupEstimateWorker(QThread):
+    """Compute folder sizes for a dry-run estimate (runs off the UI thread)."""
+
+    finished_ok = pyqtSignal(dict)
+    failed = pyqtSignal(str)
+
+    def __init__(self, games_to_backup, parent=None):
+        super().__init__(parent)
+        self.games = games_to_backup
+
+    def run(self):
+        from utils.backup_estimate import estimate_backup_batch
+
+        try:
+            self.finished_ok.emit(estimate_backup_batch(self.games))
+        except Exception as e:
+            self.failed.emit(str(e))
+
+
 class BackupWorker(QThread):
     progress = pyqtSignal(int, str)
     finished = pyqtSignal(str)

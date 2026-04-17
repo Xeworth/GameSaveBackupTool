@@ -95,3 +95,20 @@ class SaveManager:
         """
         print(f"Backing up saves for {game_name} from {source_path} to {destination_base_path} (placeholder)...")
         pass
+
+    def merge_imported_games(self, imported: dict) -> int:
+        """Merge ``imported`` name→entry map into ``game_save_locations``; returns count merged."""
+        n = 0
+        for name, data in imported.items():
+            if not name or not isinstance(data, dict):
+                continue
+            self.game_save_locations[name] = data
+            n += 1
+        if n:
+            self._save_game_save_data()
+        return n
+
+    def replace_all_games(self, imported: dict) -> None:
+        """Replace catalog entirely with ``imported`` (must be name→dict)."""
+        self.game_save_locations = {k: v for k, v in imported.items() if isinstance(v, dict)}
+        self._save_game_save_data()

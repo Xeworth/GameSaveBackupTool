@@ -1,14 +1,15 @@
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView, 
-    QMessageBox, QFileDialog, QProgressBar, QSystemTrayIcon, QMenu, QCheckBox,
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
+    QMessageBox, QFileDialog, QProgressBar, QProgressDialog, QSystemTrayIcon, QMenu, QCheckBox,
     QApplication, QGraphicsDropShadowEffect, QStyledItemDelegate, QGraphicsOpacityEffect,
-    QToolButton, QWidgetAction
+    QToolButton, QWidgetAction,
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSettings, QThreadPool, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty, QPoint, QSize
 from PyQt6.QtGui import QIcon, QAction, QPalette, QColor, QPainter, QLinearGradient, QPen, QBrush, QPainterPath, QPainterPath, QKeySequence, QShortcut, QCursor, QGuiApplication
 import sys
 import os
+import json
 from datetime import datetime
 import winreg
 import time
@@ -41,12 +42,21 @@ except ImportError:
     audio = None
 
 from core.compression import options_from_qsettings
+from core.game_catalog_io import (
+    export_catalog_csv,
+    export_catalog_json,
+    import_catalog_csv,
+    import_catalog_json,
+)
 from core.game_detector import GameDetector
 from core.save_manager import SaveManager
 from styles.manager import StyleManager
 from ui.custom_dialogs import AddCustomGameDialog, SettingsDialog, FirstBackupDestinationDialog
+from ui.health_strip import HealthStrip
+from ui.shortcuts_dialog import ShortcutsDialog
 from ui.workers import (
     AutoBackupWorker,
+    BackupEstimateWorker,
     BackupWorker,
     CompressBackupWorker,
     GameDetectorWorker,
@@ -445,6 +455,13 @@ class MainWindow(QMainWindow):
         self.table_container.set_accent_color(self._styles.accent_qcolor())
         self.main_layout.addWidget(self.table_container)
 
+        self.health_strip = HealthStrip(self)
+        self.main_layout.addWidget(self.health_strip)
+        self._health_timer = QTimer(self)
+        self._health_timer.setInterval(45_000)
+        self._health_timer.timeout.connect(self.health_strip.refresh)
+        self._health_timer.start()
+
         self.status_label = QLabel("Ready.")
         self.status_label.setStyleSheet("font-size: 11px;")
         self.main_layout.addWidget(self.status_label)
@@ -468,6 +485,7 @@ class MainWindow(QMainWindow):
         self.backup_selected_button.clicked.connect(self.backup_selected_saves)
         bottom_layout.addWidget(self.backup_selected_button)
         QShortcut(QKeySequence("Ctrl+B"), self, self.backup_selected_saves)
+        QShortcut(QKeySequence("F1"), self, self._show_shortcuts_dialog)
 
         self.compress_button = QPushButton("Compress")
         self.compress_button.setEnabled(False)
@@ -531,6 +549,21 @@ class MainWindow(QMainWindow):
         self.filter_button.clicked.connect(self._cycle_filter_state)
         bottom_layout.addWidget(self.filter_button)
 
+        self.tools_button = QToolButton()
+        self.tools_button.setText("Tools")
+        self.tools_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonInstantPopup)
+        self.tools_button.setToolTip("Export/import game list, keyboard shortcuts")
+        self._tools_menu = QMenu(self)
+        self._tools_menu.setStyleSheet(self._styles.menu_qss())
+        self._tools_menu.addAction("Export game list (JSON)…", self._export_catalog_json)
+        self._tools_menu.addAction("Export game list (CSV)…", self._export_catalog_csv)
+        self._tools_menu.addAction("Import game list (JSON)…", self._import_catalog_json)
+        self._tools_menu.addAction("Import game list (CSV)…", self._import_catalog_csv)
+        self._tools_menu.addSeparator()
+        self._tools_menu.addAction("Shortcuts and tips…", self._show_shortcuts_dialog)
+        self.tools_button.setMenu(self._tools_menu)
+        bottom_layout.addWidget(self.tools_button)
+
         self.settings_button = QPushButton("Settings")
         self.settings_button.setEnabled(True)
         self.settings_button.clicked.connect(self.open_settings)
@@ -545,9 +578,11 @@ class MainWindow(QMainWindow):
         self.games_data = {}
         # For Ctrl+Z undo of last deletion
         self._last_deleted_entries = []
+        self._backup_estimate_worker = None
 
         # Perform the heavier post-construction setup once everything above exists
         self._set_scan_button_idle_text()
+        self.health_strip.refresh()
         if self._sandbox_monitor:
             self._sandbox_log(
                 "sandbox",
@@ -1529,6 +1564,8 @@ class MainWindow(QMainWindow):
             self.scan_menu.setStyleSheet(self._styles.menu_qss())
             if hasattr(self, "tray_menu"):
                 self.tray_menu.setStyleSheet(self._styles.menu_qss())
+            if hasattr(self, "_tools_menu"):
+                self._tools_menu.setStyleSheet(self._styles.menu_qss())
             self._apply_tray_cancel_button_style()
             self.update_scan_button_style(is_cancel=self.is_scanning)
             if getattr(self, "_compress_running", False):
@@ -1538,6 +1575,8 @@ class MainWindow(QMainWindow):
             self.status_label.setText("Settings saved.")
             if self._sandbox_monitor:
                 self._sandbox_monitor.apply_app_style()
+            if hasattr(self, "health_strip"):
+                self.health_strip.refresh()
 
     def refresh_backup_dates(self):
         """Refresh all backup dates in the table with the current date format"""
@@ -1682,6 +1721,7 @@ class MainWindow(QMainWindow):
         - Ctrl+A: select all rows in the table
         - Delete: delete selected rows
         - Ctrl+Z: undo last delete
+        - F1: shortcuts and tips (same as Tools menu)
         These work even if focus is not currently on the table widget.
         """
         if event.matches(QKeySequence.StandardKey.SelectAll) or \
@@ -2454,30 +2494,202 @@ class MainWindow(QMainWindow):
             if dialog.get_remember_default():
                 self.last_backup_path = destination_folder
 
-        # Optional confirmation before backup
-        if self.settings.value("confirm_before_backup", False, type=bool):
-            n = len(games_to_backup)
-            msg = f"Back up {n} game(s) to:\n{destination_folder}\n\nContinue?"
-            reply = QMessageBox.question(
-                self,
-                "Confirm Backup",
-                msg,
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            if reply != QMessageBox.StandardButton.Yes:
-                return
-
         subfolder_per_game = self.settings.value("backup_subfolder_per_game", True, type=bool)
+        want_est = self.settings.value("show_backup_estimate", True, type=bool)
+        want_confirm = self.settings.value("confirm_before_backup", False, type=bool)
+
+        if not want_est and not want_confirm:
+            self._start_backup_worker(games_to_backup, destination_folder, subfolder_per_game)
+            return
+
+        if not want_est and want_confirm:
+            if not self._prompt_backup_start(games_to_backup, destination_folder, None):
+                return
+            self._start_backup_worker(games_to_backup, destination_folder, subfolder_per_game)
+            return
+
+        self._run_backup_estimate_async(games_to_backup, destination_folder, subfolder_per_game)
+
+    def _start_backup_worker(self, games_to_backup, destination_folder, subfolder_per_game):
         self.scan_button.setEnabled(False)
         self.backup_selected_button.setEnabled(False)
         self.progress_bar.setValue(0)
-        self.backup_worker = BackupWorker(games_to_backup, destination_folder, subfolder_per_game=subfolder_per_game)
-        self.backup_worker.progress.connect(lambda val, msg: [self.progress_bar.setValue(val), self.status_label.setText(msg)])
+        self.backup_worker = BackupWorker(
+            games_to_backup, destination_folder, subfolder_per_game=subfolder_per_game
+        )
+        self.backup_worker.progress.connect(
+            lambda val, msg: [self.progress_bar.setValue(val), self.status_label.setText(msg)]
+        )
         self.backup_worker.game_backed_up.connect(self.on_game_backed_up)
         self.backup_worker.finished.connect(self.on_backup_finished)
         self.backup_worker.error.connect(self.display_error)
         self.backup_worker.start()
+
+    def _prompt_backup_start(self, games_to_backup, destination_folder, est):
+        """Ask for confirmation and/or show size estimate. ``est`` may be None."""
+        from utils.backup_estimate import estimate_summary_text
+
+        n = len(games_to_backup)
+        want_confirm = self.settings.value("confirm_before_backup", False, type=bool)
+        if est is None and not want_confirm:
+            return True
+        if est is None and want_confirm:
+            msg = f"Back up {n} game(s) to:\n{destination_folder}\n\nContinue?"
+            return (
+                QMessageBox.question(
+                    self,
+                    "Confirm backup",
+                    msg,
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No,
+                )
+                == QMessageBox.StandardButton.Yes
+            )
+        summary = estimate_summary_text(est, n)
+        if want_confirm:
+            msg = f"Back up {n} game(s) to:\n{destination_folder}\n\n{summary}\n\nContinue?"
+            title = "Confirm backup"
+        else:
+            msg = f"{summary}\n\nStart backup now?"
+            title = "Backup estimate"
+        return (
+            QMessageBox.question(
+                self,
+                title,
+                msg,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            == QMessageBox.StandardButton.Yes
+        )
+
+    def _run_backup_estimate_async(self, games_to_backup, destination_folder, subfolder_per_game):
+        prog = QProgressDialog(self)
+        prog.setWindowTitle("Backup")
+        prog.setLabelText("Calculating backup size…")
+        prog.setRange(0, 0)
+        prog.setCancelButton(None)
+        prog.setWindowModality(Qt.WindowModality.WindowModal)
+        prog.setMinimumDuration(0)
+        prog.show()
+        QApplication.processEvents()
+
+        worker = BackupEstimateWorker(games_to_backup, self)
+        self._backup_estimate_worker = worker
+
+        def cleanup_worker():
+            self._backup_estimate_worker = None
+            worker.deleteLater()
+
+        def on_ok(est):
+            prog.close()
+            cleanup_worker()
+            if not self._prompt_backup_start(games_to_backup, destination_folder, est):
+                return
+            self._start_backup_worker(games_to_backup, destination_folder, subfolder_per_game)
+
+        def on_err(msg):
+            prog.close()
+            cleanup_worker()
+            q = QMessageBox.question(
+                self,
+                "Estimate failed",
+                f"{msg}\n\nStart backup without a size estimate?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if q != QMessageBox.StandardButton.Yes:
+                return
+            if not self._prompt_backup_start(games_to_backup, destination_folder, None):
+                return
+            self._start_backup_worker(games_to_backup, destination_folder, subfolder_per_game)
+
+        worker.finished_ok.connect(on_ok)
+        worker.failed.connect(on_err)
+        worker.start()
+
+    def _export_catalog_json(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Export game list", "", "JSON (*.json);;All files (*.*)")
+        if not path:
+            return
+        if not path.lower().endswith(".json"):
+            path += ".json"
+        try:
+            export_catalog_json(self.save_manager.game_save_locations, path)
+            self.status_label.setText(f"Exported game list to {path}")
+        except OSError as e:
+            QMessageBox.warning(self, "Export failed", str(e))
+
+    def _export_catalog_csv(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Export game list", "", "CSV (*.csv);;All files (*.*)")
+        if not path:
+            return
+        if not path.lower().endswith(".csv"):
+            path += ".csv"
+        try:
+            export_catalog_csv(self.save_manager.game_save_locations, path)
+            self.status_label.setText(f"Exported game list to {path}")
+        except OSError as e:
+            QMessageBox.warning(self, "Export failed", str(e))
+
+    def _import_catalog_json(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Import game list", "", "JSON (*.json);;All files (*.*)")
+        if not path:
+            return
+        try:
+            data, note = import_catalog_json(path)
+        except (OSError, ValueError, json.JSONDecodeError) as e:
+            QMessageBox.warning(self, "Import failed", str(e))
+            return
+        self._apply_catalog_import(data, note)
+
+    def _import_catalog_csv(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Import game list", "", "CSV (*.csv);;All files (*.*)")
+        if not path:
+            return
+        try:
+            data = import_catalog_csv(path)
+        except (OSError, ValueError) as e:
+            QMessageBox.warning(self, "Import failed", str(e))
+            return
+        self._apply_catalog_import(data, "CSV")
+
+    def _apply_catalog_import(self, data: dict, note: str):
+        if not data:
+            QMessageBox.information(self, "Import", "No game entries found in file.")
+            return
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Icon.Question)
+        msg.setWindowTitle("Import game list")
+        msg.setText(
+            f"Loaded {len(data)} game(s) ({note}).\n\n"
+            "Merge adds/updates entries and keeps other games. Replace clears the current list first."
+        )
+        merge_btn = msg.addButton("Merge with existing", QMessageBox.ButtonRole.YesRole)
+        replace_btn = msg.addButton("Replace entire list", QMessageBox.ButtonRole.DestructiveRole)
+        cancel_btn = msg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+        msg.exec()
+        clicked = msg.clickedButton()
+        if clicked in (None, cancel_btn):
+            return
+        if clicked == replace_btn:
+            self.save_manager.replace_all_games(data)
+            self.status_label.setText(f"Imported game list: replaced with {len(data)} game(s).")
+        elif clicked == merge_btn:
+            n = self.save_manager.merge_imported_games(data)
+            self.status_label.setText(f"Imported game list: merged {n} game(s).")
+        else:
+            return
+        self.game_table_widget.setRowCount(0)
+        self.populate_games_from_cache()
+        self._update_backup_compress_buttons()
+        self._apply_filter()
+        if hasattr(self, "health_strip"):
+            self.health_strip.refresh()
+
+    def _show_shortcuts_dialog(self):
+        dlg = ShortcutsDialog(self)
+        dlg.exec()
 
     def on_game_backed_up(self, game_name, timestamp_str):
         """
