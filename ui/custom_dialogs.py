@@ -25,7 +25,7 @@ import sys, os
 from datetime import datetime
 
 from core.compression import find_7zip_executable
-from app_config import DEFAULT_UI_THEME, normalize_ui_theme
+from config.app_config import DEFAULT_UI_THEME, normalize_ui_theme
 from styles.manager import StyleManager
 from ui.settings_framed_tabs import SettingsFramedTabs
 from ui.seven_zip_install_worker import SevenZipInstallWorker
@@ -119,7 +119,7 @@ class AddCustomGameDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Add Custom Game")
         self.setMinimumWidth(400)
-        from app_config import settings_app_name
+        from config.app_config import settings_app_name
 
         _st = QSettings("MyCompany", settings_app_name())
         StyleManager.instance().set_theme(
@@ -177,7 +177,7 @@ class FirstBackupDestinationDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Select Backup Destination")
         self.setMinimumWidth(400)
-        from app_config import settings_app_name
+        from config.app_config import settings_app_name
         self.settings = QSettings("MyCompany", settings_app_name())
         self.selected_folder = ""
         self.remember_default = True
@@ -255,7 +255,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Settings")
 
-        from app_config import settings_app_name
+        from config.app_config import settings_app_name
         self.settings = QSettings("MyCompany", settings_app_name())
         self._7z_worker = None
         self._7z_progress_dlg = None

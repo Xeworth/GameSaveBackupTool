@@ -425,7 +425,7 @@ class MainWindow(QMainWindow):
         self._default_window_title = "Game Save Backup Tool"
         self.setWindowTitle(self._default_window_title)
 
-        from app_config import settings_app_name, DEFAULT_UI_THEME, normalize_ui_theme
+        from config.app_config import settings_app_name, DEFAULT_UI_THEME, normalize_ui_theme
         self.settings = QSettings("MyCompany", settings_app_name())
         self._load_settings()
         self._styles.set_theme(
@@ -749,88 +749,126 @@ class MainWindow(QMainWindow):
         pos = QPoint(global_top_right.x() - menu_size.width(), global_top_right.y() - menu_size.height())
         self.scan_menu.popup(pos)
 
+    def _resolved_backup_dest_for_auto_backup(self) -> str:
+        """Return a usable on-disk backup root for auto-backup, or empty string."""
+        backup_dest = self.settings.value("default_backup_path", "", type=str)
+        if backup_dest and os.path.exists(backup_dest):
+            return backup_dest
+        backup_dest = self.settings.value("last_backup_path", "", type=str)
+        if backup_dest and os.path.exists(backup_dest):
+            return backup_dest
+        return ""
+
+    def _watcher_poll_timer_wanted(self) -> bool:
+        """Poll only while auto-backup might need (re)start, or an observer thread is running."""
+        if not WATCHDOG_AVAILABLE:
+            return False
+        if self.file_observer and self.file_observer.is_alive():
+            return True
+        if not self.settings.value("auto_backup_enabled", False, type=bool):
+            return False
+        return bool(self._resolved_backup_dest_for_auto_backup())
+
+    def _sync_watcher_poll_timer(self) -> None:
+        """Start/stop the 30s poll timer so we never tick when auto-backup is fully idle."""
+        if not WATCHDOG_AVAILABLE or not getattr(self, "watcher_timer", None):
+            return
+        want = self._watcher_poll_timer_wanted()
+        active = self.watcher_timer.isActive()
+        if want and not active:
+            self.watcher_timer.start(30000)
+            print("File watcher: poll timer on (30s; auto-backup may start or restart monitoring).")
+        elif not want and active:
+            self.watcher_timer.stop()
+            print("File watcher: poll timer off.")
+
     def setup_file_watcher(self):
-        """Setup file monitoring for automatic backups"""
+        """Prepare auto-backup file monitoring (watchdog observer is created only when needed)."""
         if not WATCHDOG_AVAILABLE:
             print("Watchdog library not installed - file monitoring disabled")
             self.file_observer = None
+            self.watched_games = {}
+            self.watcher_timer = None
             return
-            
-        self.file_observer = Observer()
-        self.watched_games = {}  # Store game name -> event handler mapping
-        self.last_backup_times = {}  # Store game name -> last backup timestamp
-        
-        # Timer to periodically check if we should restart monitoring
+
+        self.file_observer = None
+        self.watched_games = {}
+        self.last_backup_times = {}
         self.watcher_timer = QTimer()
         self.watcher_timer.timeout.connect(self.check_watcher_status)
-        self.watcher_timer.start(30000)  # Check every 30 seconds
-        
-        print("File watcher initialized successfully")
+        self._sync_watcher_poll_timer()
+        if not self._watcher_poll_timer_wanted():
+            print("File watcher: idle (automatic backups off or no valid backup folder).")
 
     def start_file_monitoring(self):
         """Start monitoring save files for automatic backup"""
-        if not WATCHDOG_AVAILABLE or not self.file_observer:
+        if not WATCHDOG_AVAILABLE:
             return
-            
+
         auto_backup_enabled = self.settings.value("auto_backup_enabled", False, type=bool)
-        if not auto_backup_enabled:
+        backup_dest = self._resolved_backup_dest_for_auto_backup()
+
+        if not auto_backup_enabled or not backup_dest:
+            self.stop_file_monitoring(quiet=False)
+            self._sync_watcher_poll_timer()
             return
-            
-        backup_dest = self.settings.value("default_backup_path", "")
-        if not backup_dest or not os.path.exists(backup_dest):
-            # Fallback to last_backup_path for backward compatibility
-            backup_dest = self.settings.value("last_backup_path", "")
-            if not backup_dest or not os.path.exists(backup_dest):
-                return
-            
-        # Stop existing monitoring
-        self.stop_file_monitoring()
-        
-        # Start monitoring for games with save files
+
+        self.stop_file_monitoring(quiet=True)
+
+        observer = Observer()
         monitored_count = 0
         for game_name, data in self.save_manager.game_save_locations.items():
             save_path_raw = data.get("save_path")
             if not save_path_raw or save_path_raw == "":
                 continue
-                
+
             save_path = self.save_manager.resolve_path(save_path_raw)
             if save_path and os.path.exists(save_path):
                 handler = SaveFileEventHandler(game_name, save_path, self.trigger_auto_backup)
-                self.file_observer.schedule(handler, save_path, recursive=True)
+                observer.schedule(handler, save_path, recursive=True)
                 self.watched_games[game_name] = handler
                 monitored_count += 1
                 print(f"Monitoring {game_name} at {save_path}")
-        
-        if monitored_count > 0:
-            self.file_observer.start()
-            print(f"Started file monitoring for {monitored_count} games")
-            self._show_tray_notification("Auto-Backup Active", 
-                f"Monitoring {monitored_count} games for automatic backup", 
-                QSystemTrayIcon.MessageIcon.Information, 3000)
 
-    def stop_file_monitoring(self):
-        """Stop file monitoring"""
-        if self.file_observer and self.file_observer.is_alive():
+        if monitored_count == 0:
+            print("File watcher: auto-backup enabled, but no on-disk save folders to watch yet.")
+            self._sync_watcher_poll_timer()
+            return
+
+        self.file_observer = observer
+        self.file_observer.start()
+        print(f"File monitoring started ({monitored_count} game folder(s) watched).")
+        self._sync_watcher_poll_timer()
+        self._show_tray_notification(
+            "Auto-Backup Active",
+            f"Monitoring {monitored_count} games for automatic backup",
+            QSystemTrayIcon.MessageIcon.Information,
+            3000,
+        )
+
+    def stop_file_monitoring(self, *, quiet: bool = False) -> None:
+        """Stop file monitoring. Use ``quiet=True`` when immediately restarting the observer."""
+        was_alive = bool(self.file_observer and self.file_observer.is_alive())
+        if was_alive:
             self.file_observer.stop()
             self.file_observer.join()
-            
+            if not quiet:
+                print("File monitoring stopped (save folders unwatched).")
+
         self.watched_games.clear()
-        if WATCHDOG_AVAILABLE:
-            self.file_observer = Observer()  # Create a fresh observer
-        else:
-            self.file_observer = None
+        self.file_observer = None
+        self._sync_watcher_poll_timer()
 
     def check_watcher_status(self):
         """Periodically check if watcher should be restarted"""
         if not WATCHDOG_AVAILABLE:
             return
-            
+
         auto_backup_enabled = self.settings.value("auto_backup_enabled", False, type=bool)
-        backup_dest = self.settings.value("default_backup_path", "")
-        if not backup_dest or not os.path.exists(backup_dest):
-            # Fallback to last_backup_path for backward compatibility
-            backup_dest = self.settings.value("last_backup_path", "")
-        
+        backup_dest = self._resolved_backup_dest_for_auto_backup()
+        if not auto_backup_enabled:
+            backup_dest = ""
+
         def _cache_has_disk_or_reg_save(d):
             if d.get("save_path"):
                 return True
@@ -1427,7 +1465,6 @@ class MainWindow(QMainWindow):
     
     def quit_application(self):
         """Quit the application completely"""
-        self._cleanup_background_processes()
         self._save_settings()
         if hasattr(self, 'tray_icon'):
             self.tray_icon.hide()
@@ -1481,7 +1518,7 @@ class MainWindow(QMainWindow):
     def open_settings(self):
         dialog = SettingsDialog(self)
         if dialog.exec():
-            from app_config import DEFAULT_UI_THEME, normalize_ui_theme
+            from config.app_config import DEFAULT_UI_THEME, normalize_ui_theme
 
             self._styles.set_theme(
                 normalize_ui_theme(self.settings.value("ui_theme", DEFAULT_UI_THEME, type=str))
@@ -1573,8 +1610,7 @@ class MainWindow(QMainWindow):
         self._do_quit(event)
 
     def _do_quit(self, event=None):
-        """Perform actual quit: cleanup, save, hide tray; accept close event if provided."""
-        self._cleanup_background_processes()
+        """Perform actual quit: save, hide tray; teardown runs once on ``aboutToQuit``."""
         self._save_settings()
         if hasattr(self, 'tray_icon'):
             self.tray_icon.hide()
@@ -1584,23 +1620,25 @@ class MainWindow(QMainWindow):
             QApplication.instance().quit()
     
     def _cleanup_background_processes(self):
-        """Clean up all background processes and threads"""
+        """Clean up threads, timers, and watchdog once when the app is quitting (``aboutToQuit``)."""
+        if getattr(self, "_shutdown_cleanup_ran", False):
+            return
+        self._shutdown_cleanup_ran = True
         print("Cleaning up background processes...")
-        
-        # Stop file monitoring
-        if hasattr(self, 'file_observer') and self.file_observer:
+
+        # Stop file monitoring (may already be stopped; join with timeout on quit)
+        if getattr(self, "file_observer", None):
             try:
                 if self.file_observer.is_alive():
                     self.file_observer.stop()
-                    self.file_observer.join(timeout=2)  # Wait up to 2 seconds
-                    print("File observer stopped")
+                    self.file_observer.join(timeout=2)
+                    print("File monitoring stopped (shutdown).")
             except Exception as e:
                 print(f"Error stopping file observer: {e}")
-        
-        # Stop watcher timer
-        if hasattr(self, 'watcher_timer'):
+
+        if getattr(self, "watcher_timer", None) and self.watcher_timer.isActive():
             self.watcher_timer.stop()
-            print("Watcher timer stopped")
+            print("File watcher: poll timer off (shutdown).")
         
         # Stop any running worker threads
         if hasattr(self, 'game_detector_thread') and self.game_detector_thread and self.game_detector_thread.isRunning():

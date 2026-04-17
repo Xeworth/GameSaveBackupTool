@@ -8,7 +8,7 @@ from typing import ClassVar, Optional, Tuple
 
 from PyQt6.QtGui import QColor
 
-from app_config import normalize_ui_theme
+from config.app_config import normalize_ui_theme
 from utils.system_info import get_windows_accent_rgb
 from utils.windows_theme import windows_apps_use_light_theme
 

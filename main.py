@@ -2,7 +2,7 @@ import sys
 import os
 import argparse
 
-# Parse --sandbox before importing UI so app_config sees it (fresh settings for testing).
+# Parse --sandbox before importing UI so config.app_config sees it (fresh settings for testing).
 parser = argparse.ArgumentParser(description="Game Save Backup Tool")
 parser.add_argument(
     "-s",
@@ -27,7 +27,7 @@ if args.sandbox:
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QIcon
 
-from app_config import SANDBOX
+from config.app_config import SANDBOX
 from ui.main_window import MainWindow
 
 # --- NEW: Helper function to find files when packaged ---
