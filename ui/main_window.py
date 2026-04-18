@@ -3,9 +3,9 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
     QMessageBox, QFileDialog, QProgressBar, QProgressDialog, QSystemTrayIcon, QMenu, QCheckBox,
     QApplication, QDialog, QGraphicsDropShadowEffect, QStyledItemDelegate, QGraphicsOpacityEffect,
-    QToolButton, QWidgetAction,
+    QStyle, QStyleOptionButton, QToolButton, QWidgetAction,
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QSettings, QThreadPool, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty, QPoint, QSize
+from PyQt6.QtCore import Qt, pyqtSignal, QSettings, QThreadPool, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty, QPoint, QRect, QSize
 from PyQt6.QtGui import QIcon, QAction, QPalette, QColor, QPainter, QLinearGradient, QPen, QBrush, QPainterPath, QPainterPath, QKeySequence, QShortcut, QCursor, QGuiApplication
 import sys
 import os
@@ -18,20 +18,52 @@ from core.registry_save_resolver import format_registry_save_display
 
 # --- UI helper widgets ------------------------------------------------------
 
-class UpwardMenuToolButton(QToolButton):
-    """Tool button whose attached menu opens above the button instead of below."""
 
-    def showMenu(self) -> None:
-        menu = self.menu()
-        if not menu:
+class ToolsMenuButton(QPushButton):
+    """Single 'Tools' button: small up-triangle to the right of the label, top-floating (menu opens above)."""
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        if not self.isEnabled():
             return
+        opt = QStyleOptionButton()
+        self.initStyleOption(opt)
+        style = self.style()
+        r = style.subElementRect(QStyle.SubElement.SE_PushButtonContents, opt, self)
+        if r.width() < 4 or r.height() < 4:
+            return
+        fm = self.fontMetrics()
+        text = self.text()
+        tw = fm.horizontalAdvance(text)
+        cell = QRect(
+            int(r.left() + (r.width() - tw) // 2),
+            int(r.top()),
+            tw,
+            int(r.height()),
+        )
+        br = fm.boundingRect(
+            cell,
+            int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
+            text,
+        )
+        gap = 3
+        tri_w = 5.0
+        tri_h = 4.0
+        left = float(br.right() + gap)
+        tip_x = left + tri_w * 0.5
+        tip_y = float(br.top() + 1)
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        p.setPen(Qt.PenStyle.NoPen)
+        cg = QPalette.ColorGroup.Disabled if not self.isEnabled() else QPalette.ColorGroup.Active
+        p.setBrush(self.palette().brush(cg, QPalette.ColorRole.ButtonText))
+        path = QPainterPath()
+        path.moveTo(tip_x, tip_y)
+        path.lineTo(left, tip_y + tri_h)
+        path.lineTo(left + tri_w, tip_y + tri_h)
+        path.closeSubpath()
+        p.drawPath(path)
 
-        # Ask the menu how big it wants to be, then place it so its bottom
-        # edge is aligned with the top edge of the tool button.
-        menu_size = menu.sizeHint()
-        global_top_left = self.mapToGlobal(self.rect().topLeft())
-        menu_y = global_top_left.y() - menu_size.height()
-        menu.popup(QPoint(global_top_left.x(), menu_y))
 
 # Windows Toast notification support
 try:
@@ -53,7 +85,15 @@ from core.save_manager import SaveManager
 from styles.manager import StyleManager
 from ui.custom_dialogs import AddCustomGameDialog, SettingsDialog, FirstBackupDestinationDialog
 from ui.backup_estimate_dialog import BackupEstimatePromptDialog
+from ui.health_dialog import HealthInfoDialog
+from ui.about_dialog import AboutDialog
 from ui.shortcuts_dialog import ShortcutsDialog
+try:
+    from config.sandbox_log_prefs import read_log_setting
+except ImportError:
+
+    def read_log_setting(_settings, key: str) -> bool:  # noqa: ARG001
+        return False if key == "show_compress_tick_notes" else True
 from ui.workers import (
     AutoBackupWorker,
     BackupEstimateWorker,
@@ -542,22 +582,10 @@ class MainWindow(QMainWindow):
         self.filter_button.clicked.connect(self._cycle_filter_state)
         bottom_layout.addWidget(self.filter_button)
 
-        # Composite Tools button: [ Tools | ▲ ] — same visual language as Scan
-        self.tools_main_button = QPushButton("Tools")
-        self.tools_main_button.setObjectName("tools_main_button")
-        self.tools_main_button.setToolTip("Tools menu (export / import / shortcuts)")
-        self.tools_main_button.clicked.connect(self._show_tools_menu_above)
-        arrow_icon_path_tools = os.path.join(os.path.dirname(__file__), "scroll_up.svg")
-        self.tools_arrow_button = QToolButton()
-        self.tools_arrow_button.setObjectName("tools_arrow_button")
-        self.tools_arrow_button.setFixedWidth(18)
-        self.tools_arrow_button.setFixedHeight(19)
-        self.tools_arrow_button.setIcon(QIcon(arrow_icon_path_tools))
-        self.tools_arrow_button.setIconSize(QSize(8, 6))
-        self.tools_arrow_button.clicked.connect(self._show_tools_menu_above)
-
         self._tools_menu = QMenu(self)
         self._tools_menu.setStyleSheet(self._styles.menu_qss())
+        self._tools_menu.addAction("Backup folder & disk health…", self._open_tools_health_dialog)
+        self._tools_menu.addSeparator()
         self._tools_menu.addAction("Export game list (JSON)…", self._export_catalog_json)
         self._tools_menu.addAction("Export game list (CSV)…", self._export_catalog_csv)
         self._tools_menu.addSeparator()
@@ -565,16 +593,19 @@ class MainWindow(QMainWindow):
         self._tools_menu.addAction("Import game list (CSV)…", self._import_catalog_csv)
         self._tools_menu.addSeparator()
         self._tools_menu.addAction("Shortcuts and tips…", self._show_shortcuts_dialog)
+        self._tools_menu.addSeparator()
+        self._tools_menu.addAction("About Game Save Backup Tool…", self._show_about_dialog)
 
-        self.tools_button_container = QWidget()
-        self.tools_button_container.setObjectName("tools_button_container")
-        tools_layout = QHBoxLayout(self.tools_button_container)
-        tools_layout.setContentsMargins(0, 0, 0, 0)
-        tools_layout.setSpacing(0)
-        tools_layout.addWidget(self.tools_main_button)
-        tools_layout.addWidget(self.tools_arrow_button)
-        self._apply_tools_button_style()
-        bottom_layout.addWidget(self.tools_button_container)
+        tools_tip = (
+            "Tools: backup folder & disk health, export/import, shortcuts (F1), about"
+        )
+        self.tools_button = ToolsMenuButton("Tools")
+        self.tools_button.setObjectName("tools_menu_button")
+        self.tools_button.setToolTip(tools_tip)
+        self.tools_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.tools_button.clicked.connect(self._popup_tools_menu_above_tools_button)
+        self._apply_tools_menu_button_style()
+        bottom_layout.addWidget(self.tools_button)
 
         self.settings_button = QPushButton("Settings")
         self.settings_button.setEnabled(True)
@@ -639,7 +670,7 @@ class MainWindow(QMainWindow):
             disabled_bg = "stop:0 #ececf0, stop:1 #e4e4ea"
             ch_top, ch_bottom = "#ffffff", "#efeff4"
             cd_border = "#d4d4dc"
-            scan_main_color = "#141418"
+            scan_main_color = sm.ui_body_text_light()
             scan_dis_color = "#9898a4"
             sp_top, sp_bottom = "#d8d8e2", "#ceced8"
             arrow_dis_border = "#d0d0d8"
@@ -652,7 +683,7 @@ class MainWindow(QMainWindow):
             disabled_bg = "stop:0 #1e1e1e, stop:1 #1e1e1e"
             ch_top, ch_bottom = "#505053", "#3a3a3d"
             cd_border = "#2d2d30"
-            scan_main_color = "#ffffff"
+            scan_main_color = sm.ui_body_text_dark()
             scan_dis_color = "#6a6a6a"
             sp_top, sp_bottom = "#2d2d30", "#1e1e1e"
             arrow_dis_border = "#2d2d30"
@@ -730,105 +761,83 @@ class MainWindow(QMainWindow):
             """
         )
 
-    def _apply_tools_button_style(self) -> None:
-        """Match composite Scan styling for the Tools split button."""
-        if not hasattr(self, "tools_button_container"):
+    def _apply_tools_menu_button_style(self) -> None:
+        """Same gradients as main-window QPushButton (styles/manager.py) + triangle paint."""
+        btn = getattr(self, "tools_button", None)
+        if btn is None:
             return
         sm = StyleManager.instance()
+        hover_border = sm.rgba(200)
         if sm.is_light_theme():
-            bg_top = "#f4f4f8"
-            bg_bottom = "#e6e6ee"
-            border_color = "#c4c4ce"
-            hover_border = sm.rgba(200)
-            disabled_bg = "stop:0 #ececf0, stop:1 #e4e4ea"
-            ch_top, ch_bottom = "#ffffff", "#efeff4"
-            cd_border = "#d4d4dc"
-            main_color = "#141418"
-            dis_color = "#9898a4"
-            sp_top, sp_bottom = "#d8d8e2", "#ceced8"
-            arrow_dis_border = "#d0d0d8"
-        else:
-            bg_top = "#3a3a3d"
-            bg_bottom = "#2d2d30"
-            border_color = "#3e3e42"
-            hover_border = sm.rgba(200)
-            disabled_bg = "stop:0 #1e1e1e, stop:1 #1e1e1e"
-            ch_top, ch_bottom = "#505053", "#3a3a3d"
-            cd_border = "#2d2d30"
-            main_color = "#ffffff"
-            dis_color = "#6a6a6a"
-            sp_top, sp_bottom = "#2d2d30", "#1e1e1e"
-            arrow_dis_border = "#2d2d30"
-
-        self.tools_button_container.setStyleSheet(
-            f"""
-            QWidget#tools_button_container {{
+            main_color = sm.ui_body_text_light()
+            btn.setStyleSheet(
+                f"""
+            QPushButton#tools_menu_button {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {bg_top}, stop:1 {bg_bottom});
-                border: 1px solid {border_color};
+                    stop:0 #fafafc, stop:1 #e8e8ee);
+                border: 1px solid #c4c4ce;
                 border-radius: 4px;
+                color: {main_color};
+                font-size: 11px;
+                padding: 1px 14px 1px 6px;
+                min-height: 19px;
+                max-height: 19px;
+                height: 19px;
+                min-width: 0px;
             }}
-            QWidget#tools_button_container:hover:enabled {{
+            QPushButton#tools_menu_button:hover:enabled {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {ch_top}, stop:1 {ch_bottom});
+                    stop:0 #ffffff, stop:1 #efeff4);
                 border: 2px solid {hover_border};
                 border-radius: 4px;
             }}
-            QWidget#tools_button_container:disabled {{
+            QPushButton#tools_menu_button:pressed {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    {disabled_bg});
-                border: 1px solid {cd_border};
-                border-radius: 4px;
+                    stop:0 #dedee6, stop:1 #d0d0da);
             }}
-            QPushButton#tools_main_button {{
-                background: transparent;
-                border: none;
-                color: {main_color};
-                font-size: 11px;
-                min-height: 19px;
-                max-height: 19px;
-                height: 19px;
-                padding: 1px 12px;
-            }}
-            QPushButton#tools_main_button:disabled {{
-                background: transparent;
-                border: none;
-                color: {dis_color};
-            }}
-            QPushButton#tools_main_button:hover {{
-                background: transparent;
-                border: none;
-            }}
-            QPushButton#tools_main_button:pressed {{
+            QPushButton#tools_menu_button:disabled {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {sp_top}, stop:1 {sp_bottom});
-                border: none;
-            }}
-            QToolButton#tools_arrow_button {{
-                background: transparent;
-                border: none;
-                min-height: 19px;
-                max-height: 19px;
-                height: 19px;
-                padding: 0 4px;
-                border-left: 1px solid {border_color};
-            }}
-            QToolButton#tools_arrow_button:disabled {{
-                background: transparent;
-                border-left: 1px solid {arrow_dis_border};
-                color: {dis_color};
-            }}
-            QToolButton#tools_arrow_button::menu-indicator {{
-                image: none;
-                width: 0px;
-            }}
-            QToolButton#tools_arrow_button:pressed {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {sp_top}, stop:1 {sp_bottom});
-                border: none;
+                    stop:0 #ececf0, stop:1 #ececf0);
+                color: #9898a4;
+                border-color: #d4d4dc;
             }}
             """
-        )
+            )
+        else:
+            main_color = sm.ui_body_text_dark()
+            btn.setStyleSheet(
+                f"""
+            QPushButton#tools_menu_button {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #454548, stop:1 #2a2a2d);
+                border: 1px solid #3e3e42;
+                border-radius: 4px;
+                color: {main_color};
+                font-size: 11px;
+                padding: 1px 14px 1px 6px;
+                min-height: 19px;
+                max-height: 19px;
+                height: 19px;
+                min-width: 0px;
+            }}
+            QPushButton#tools_menu_button:hover:enabled {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #505053, stop:1 #3a3a3d);
+                border: 2px solid {hover_border};
+                border-radius: 4px;
+            }}
+            QPushButton#tools_menu_button:pressed {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #2d2d30, stop:1 #202020);
+            }}
+            QPushButton#tools_menu_button:disabled {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #202020, stop:1 #202020);
+                color: #6a6a6a;
+                border-color: #2d2d30;
+            }}
+            """
+            )
 
     def _set_scan_button_label_only(self) -> None:
         """Set only the label text for the scan button (no caret)."""
@@ -896,15 +905,6 @@ class MainWindow(QMainWindow):
         global_top_right = self.scan_arrow_button.mapToGlobal(self.scan_arrow_button.rect().topRight())
         pos = QPoint(global_top_right.x() - menu_size.width(), global_top_right.y() - menu_size.height())
         self.scan_menu.popup(pos)
-
-    def _show_tools_menu_above(self) -> None:
-        """Show the Tools menu above the split button (same placement idea as Scan)."""
-        if not hasattr(self, "_tools_menu") or not hasattr(self, "tools_arrow_button"):
-            return
-        menu_size = self._tools_menu.sizeHint()
-        global_top_right = self.tools_arrow_button.mapToGlobal(self.tools_arrow_button.rect().topRight())
-        pos = QPoint(global_top_right.x() - menu_size.width(), global_top_right.y() - menu_size.height())
-        self._tools_menu.popup(pos)
 
     def _resolved_backup_dest_for_auto_backup(self) -> str:
         """Return a usable on-disk backup root for auto-backup, or empty string."""
@@ -1153,7 +1153,22 @@ class MainWindow(QMainWindow):
         self.progress_bar.set_track_color(self._styles.progress_bar_track_color())
         self._apply_compress_summary_label_theme()
         self.apply_button_colors()
-        self._apply_tools_button_style()
+        self._apply_tools_menu_button_style()
+
+    def _open_tools_health_dialog(self) -> None:
+        HealthInfoDialog(self, self.settings).exec()
+
+    def _popup_tools_menu_above_tools_button(self) -> None:
+        """Open the Tools menu above the button (same geometry idea as the Scan arrow)."""
+        if not hasattr(self, "_tools_menu") or not hasattr(self, "tools_button"):
+            return
+        menu_size = self._tools_menu.sizeHint()
+        global_top_right = self.tools_button.mapToGlobal(self.tools_button.rect().topRight())
+        pos = QPoint(
+            global_top_right.x() - menu_size.width(),
+            global_top_right.y() - menu_size.height(),
+        )
+        self._tools_menu.popup(pos)
 
     def _apply_compress_summary_label_theme(self) -> None:
         if not hasattr(self, "compress_summary_label"):
@@ -2799,6 +2814,9 @@ class MainWindow(QMainWindow):
         dlg = ShortcutsDialog(self)
         dlg.exec()
 
+    def _show_about_dialog(self) -> None:
+        AboutDialog(self).exec()
+
     def on_game_backed_up(self, game_name, timestamp_str):
         """
         Updates the UI and saves the timestamp when a single game backup is complete.
@@ -2883,7 +2901,7 @@ class MainWindow(QMainWindow):
         self.compress_worker.compression_metrics.connect(self._on_compression_metrics)
         if self._sandbox_monitor:
             self._sandbox_log(
-                "compress",
+                "compress_start",
                 f"Compression started — folder: {backup_path} | mode: {comp_opts.summary_label}",
             )
         self.compress_worker.start()
@@ -2927,19 +2945,21 @@ class MainWindow(QMainWindow):
             eng = d.get("engine", "")
             note = d.get("note", "")
             fd = d.get("files_done", 0)
+            notes_on = read_log_setting(self.settings, "show_compress_tick_notes")
             if fd is not None and fd < 0:
                 af = d.get("archive_format", "zip")
                 out_lbl = "7z out" if af == "7z" else "zip out"
+                tail = f" — {note or '7-Zip running'}" if notes_on else ""
                 self._sandbox_monitor.log_line(
                     f"{eng} | {b / (1024**2):.1f} MiB ({out_lbl}) | {d.get('throughput_mib_s', 0)} MiB/s disk growth | "
-                    f"{d.get('elapsed_sec', 0)}s — {note or '7-Zip running'}",
-                    "compress",
+                    f"{d.get('elapsed_sec', 0)}s{tail}",
+                    "compress_tick",
                 )
             else:
                 self._sandbox_monitor.log_line(
                     f"{fd}/{d.get('total_files', 0)} files | {b / (1024**2):.1f} MiB read | "
                     f"{d.get('throughput_mib_s', 0)} MiB/s | {d.get('elapsed_sec', 0)}s | {eng}",
-                    "compress",
+                    "compress_tick",
                 )
         elif phase == "complete":
             b = d.get("bytes_uncompressed", 0)
@@ -2949,7 +2969,7 @@ class MainWindow(QMainWindow):
                 f"SUMMARY: {d.get('files_total', 0)} files | raw {b / (1024**3):.2f} GiB → archive {z / (1024**2):.1f} MiB "
                 f"({d.get('compression_ratio_pct', 0)}% of raw size) | {d.get('wall_sec', 0)}s wall | "
                 f"{d.get('avg_throughput_mib_s', 0)} MiB/s mean (input bytes) | {eng}",
-                "compress",
+                "compress_summary",
             )
 
     def _on_compress_progress(self, pct):
@@ -2977,14 +2997,14 @@ class MainWindow(QMainWindow):
         """Cancel running compression; partial zip will be deleted in _on_compress_finished."""
         if not getattr(self, "compress_worker", None) or not self.compress_worker.isRunning():
             return
-        self._sandbox_log("compress", "Compression cancel requested.")
+        self._sandbox_log("compress_exit", "Compression cancel requested.")
         self.compress_button.setText("Stopping...")
         self.compress_button.setEnabled(False)
         self.compress_worker.cancel()
 
     def _on_compress_finished(self, success, message):
         if self._sandbox_monitor:
-            self._sandbox_log("compress", f"Compression worker exit: success={success} | {message}")
+            self._sandbox_log("compress_exit", f"Compression worker exit: success={success} | {message}")
         self._compress_running = False
         self._compress_cancel_requested = False
         self.compress_button.setText("Compress")

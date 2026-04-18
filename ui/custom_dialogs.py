@@ -26,12 +26,12 @@ from datetime import datetime
 
 from core.compression import find_7zip_executable
 from config.app_config import DEFAULT_UI_THEME, normalize_ui_theme
+from config.app_metadata import APP_COPYRIGHT, APP_VERSION_DISPLAY
 from styles.manager import StyleManager
 from ui.settings_framed_tabs import SettingsFramedTabs
 from ui.seven_zip_install_worker import SevenZipInstallWorker
 from utils.seven_zip_install import consent_summary_text
 from utils.i18n import available_ui_language_codes
-from ui.health_dialog import HealthInfoDialog
 
 class CustomCheckBox(QCheckBox):
     """Custom checkbox with visible checkmark and animation"""
@@ -581,16 +581,8 @@ class SettingsDialog(QDialog):
         lix = self.lang_combo.findData(lang_cur)
         self.lang_combo.setCurrentIndex(lix if lix >= 0 else 0)
 
-        theme_lang_row = QHBoxLayout()
-        theme_lang_row.setSpacing(8)
-        theme_lang_row.addWidget(QLabel("Theme:"), 0)
-        theme_lang_row.addWidget(self.theme_combo, 2)
-        theme_lang_row.addSpacing(12)
-        theme_lang_row.addWidget(QLabel("Language:"), 0)
-        theme_lang_row.addWidget(self.lang_combo, 1)
-        theme_lang_widget = QWidget()
-        theme_lang_widget.setLayout(theme_lang_row)
-        themes_form.addRow(QLabel("Appearance:"), theme_lang_widget)
+        themes_form.addRow("Theme:", self.theme_combo)
+        themes_form.addRow("Language:", self.lang_combo)
 
         theme_hint = QLabel(
             "“Match system” follows Windows app light/dark. "
@@ -655,14 +647,6 @@ class SettingsDialog(QDialog):
                 self.startup_mode_combo.setCurrentIndex(idx)
         system_form.addRow(startup_label, self.startup_mode_combo)
 
-        self.health_info_button = QPushButton("Backup folder & disk health…")
-        self.health_info_button.setToolTip(
-            "Shows whether the default backup folder is writable, 7-Zip status for your compression preset, "
-            "and free disk space — same checks as before, without using main-window space."
-        )
-        self.health_info_button.clicked.connect(self._open_health_info_dialog)
-        system_form.addRow(self.health_info_button)
-
         system_outer.addLayout(system_form)
         system_outer.addStretch(1)
         self._settings_tabs.addTab(system_tab, "System settings")
@@ -676,12 +660,12 @@ class SettingsDialog(QDialog):
         version_layout = QHBoxLayout()
         version_layout.setContentsMargins(0, 0, 0, 0)
         version_layout.setSpacing(spacing_px)
-        version_label = QLabel("v1.5.2.190825")
+        version_label = QLabel(APP_VERSION_DISPLAY)
         version_label.setStyleSheet(
             f"font-size: 9px; color: {_sm.settings_version_muted_color()};"
         )
         version_layout.addWidget(version_label)
-        copyright_label = QLabel("© Xeworth")
+        copyright_label = QLabel(APP_COPYRIGHT)
         copyright_label.setStyleSheet(
             f"font-size: 9px; color: {_sm.settings_version_muted_color()};"
         )
@@ -693,9 +677,6 @@ class SettingsDialog(QDialog):
         button_box.rejected.connect(self.reject)
         bottom_layout.addWidget(button_box)
         self.main_layout.addLayout(bottom_layout)
-
-    def _open_health_info_dialog(self):
-        HealthInfoDialog(self, self.settings).exec()
 
     def update_date_preview(self):
         """Update the date format preview with current time"""

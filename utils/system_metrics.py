@@ -32,6 +32,7 @@ def snapshot() -> Dict[str, Any]:
         "ram_total_gb": None,
         "process_rss_mb": None,
         "process_cpu_percent": None,
+        "open_files": None,
         "logical_cpus": os.cpu_count() or 0,
     }
     if not _PSUTIL:
@@ -46,6 +47,11 @@ def snapshot() -> Dict[str, Any]:
         proc = psutil.Process()
         out["process_rss_mb"] = round(proc.memory_info().rss / (1024**2), 1)
         out["process_cpu_percent"] = proc.cpu_percent(interval=None)
+        try:
+            of = proc.open_files()
+            out["open_files"] = len(of) if of is not None else None
+        except (psutil.AccessDenied, OSError, NotImplementedError, AttributeError):
+            out["open_files"] = None
     except Exception:
         pass
     return out
@@ -77,4 +83,30 @@ def format_snapshot_line(s: Dict[str, Any]) -> str:
         parts.append(f"this app RSS: {prss} MiB")
     if ppc is not None:
         parts.append(f"this app CPU: {ppc:.1f}%")
+    of = s.get("open_files")
+    if of is not None:
+        parts.append(f"open files (proc): {of}")
     return "  |  ".join(parts) if parts else "metrics unavailable"
+
+
+def format_inline_hw_snapshot(s: Dict[str, Any]) -> str:
+    """
+    Short hardware suffix for appending to a single log line (e.g. compression events).
+    Returns empty string if psutil is unavailable or values are missing.
+    """
+    if not s.get("psutil"):
+        return ""
+    parts: list[str] = []
+    cpu = s.get("cpu_percent")
+    if cpu is not None:
+        parts.append(f"sysCPU {cpu:.0f}%")
+    ram = s.get("ram_percent")
+    if ram is not None:
+        parts.append(f"RAM {ram:.0f}%")
+    ppc = s.get("process_cpu_percent")
+    if ppc is not None:
+        parts.append(f"appCPU {ppc:.0f}%")
+    prss = s.get("process_rss_mb")
+    if prss is not None:
+        parts.append(f"RSS {prss:.0f}MiB")
+    return " · ".join(parts) if parts else ""

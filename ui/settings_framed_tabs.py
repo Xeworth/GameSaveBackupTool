@@ -22,20 +22,21 @@ PANEL_CONTENT_PADDING_PX = 9
 class _FramedStackPanel(QWidget):
     """Hosts the stacked pages; outline is painted (rounded rect + top gap via mask)."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        panel_object_name: str = "settingsFramedPanel",
+        *,
+        content_padding: int = PANEL_CONTENT_PADDING_PX,
+    ) -> None:
         super().__init__()
         self._tab_bar: QTabBar | None = None
         self._stack = QStackedWidget()
-        self.setObjectName("settingsFramedPanel")
+        self.setObjectName(panel_object_name)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
+        pad = max(0, int(content_padding))
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(
-            PANEL_CONTENT_PADDING_PX,
-            PANEL_CONTENT_PADDING_PX,
-            PANEL_CONTENT_PADDING_PX,
-            PANEL_CONTENT_PADDING_PX,
-        )
+        lay.setContentsMargins(pad, pad, pad, pad)
         lay.setSpacing(0)
         lay.addWidget(self._stack)
 
@@ -56,7 +57,7 @@ class _FramedStackPanel(QWidget):
         return QColor("#3e3e42")
 
     def _panel_bg_color(self) -> QColor:
-        """Must match QWidget#settingsFramedPanel background in styles/manager.py."""
+        """Must match the framed panel background in QSS (settings or sandbox, same hex)."""
         sm = StyleManager.instance()
         if sm.is_light_theme():
             return QColor("#f4f4f7")
@@ -170,11 +171,19 @@ class SettingsFramedTabs(QWidget):
 
     currentChanged = pyqtSignal(int)
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        main_tabs_object_name: str = "settingsMainTabs",
+        framed_panel_object_name: str = "settingsFramedPanel",
+        framed_content_padding: int | None = None,
+    ) -> None:
         super().__init__(parent)
-        self.setObjectName("settingsMainTabs")
+        self.setObjectName(main_tabs_object_name)
 
-        self._panel = _FramedStackPanel()
+        pad = framed_content_padding if framed_content_padding is not None else PANEL_CONTENT_PADDING_PX
+        self._panel = _FramedStackPanel(framed_panel_object_name, content_padding=pad)
         self._bar = QTabBar()
         self._panel.set_tab_bar(self._bar)
 

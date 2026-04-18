@@ -14,22 +14,29 @@ from core.compression import PRESET_SEVEN_ZIP, options_from_qsettings
 class HealthStrip(QWidget):
     """Vertical status lines; call ``refresh()`` after opening."""
 
-    def __init__(self, parent: QWidget | None, settings: QSettings) -> None:
+    def __init__(
+        self, parent: QWidget | None, settings: QSettings, *, compact: bool = False
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("healthStrip")
         self._settings = settings
+        self._compact = compact
+        self._font_px = 11 if compact else 12
+        vm = 2 if compact else 6
+        sp = 4 if compact else 6
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 6, 0, 4)
-        lay.setSpacing(6)
+        lay.setContentsMargins(0, vm, 0, max(2, vm - 2))
+        lay.setSpacing(sp)
         self._lbl_backup = QLabel()
         self._lbl_7z = QLabel()
         self._lbl_disk = QLabel()
         for w in (self._lbl_backup, self._lbl_7z, self._lbl_disk):
             w.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             w.setWordWrap(True)
-            w.setStyleSheet("font-size: 12px;")
+            w.setStyleSheet(f"font-size: {self._font_px}px;")
             lay.addWidget(w)
-        lay.addStretch(1)
+        if not compact:
+            lay.addStretch(1)
 
     def refresh(self) -> None:
         settings = self._settings
@@ -39,10 +46,10 @@ class HealthStrip(QWidget):
 
         if not backup:
             self._lbl_backup.setText("Backup folder: not set")
-            self._lbl_backup.setStyleSheet("font-size: 12px; color: #c9a227;")
+            self._lbl_backup.setStyleSheet(f"font-size: {self._font_px}px; color: #c9a227;")
         elif not os.path.isdir(backup):
             self._lbl_backup.setText("Backup folder: path missing on disk")
-            self._lbl_backup.setStyleSheet("font-size: 12px; color: #e57373;")
+            self._lbl_backup.setStyleSheet(f"font-size: {self._font_px}px; color: #e57373;")
         else:
             ok_write = False
             try:
@@ -54,25 +61,25 @@ class HealthStrip(QWidget):
                 pass
             if ok_write:
                 self._lbl_backup.setText(f"Backup folder: OK (writable)\n{backup}")
-                self._lbl_backup.setStyleSheet("font-size: 12px; color: #8fdf9a;")
+                self._lbl_backup.setStyleSheet(f"font-size: {self._font_px}px; color: #8fdf9a;")
             else:
                 self._lbl_backup.setText(f"Backup folder: not writable\n{backup}")
-                self._lbl_backup.setStyleSheet("font-size: 12px; color: #e57373;")
+                self._lbl_backup.setStyleSheet(f"font-size: {self._font_px}px; color: #e57373;")
 
         preset = settings.value("compression_preset", "", type=str)
         if preset == PRESET_SEVEN_ZIP:
             opts = options_from_qsettings(settings)
             if opts.seven_zip_exe:
                 self._lbl_7z.setText(f"7-Zip: found\n{opts.seven_zip_exe}")
-                self._lbl_7z.setStyleSheet("font-size: 12px; color: #8fdf9a;")
+                self._lbl_7z.setStyleSheet(f"font-size: {self._font_px}px; color: #8fdf9a;")
             else:
                 self._lbl_7z.setText(
                     "7-Zip: not found — install 7-Zip or set a path under Settings → Compress backups."
                 )
-                self._lbl_7z.setStyleSheet("font-size: 12px; color: #e57373;")
+                self._lbl_7z.setStyleSheet(f"font-size: {self._font_px}px; color: #e57373;")
         else:
             self._lbl_7z.setText("7-Zip: not required (compression preset uses built-in ZIP).")
-            self._lbl_7z.setStyleSheet("font-size: 12px; color: #b0b0b0;")
+            self._lbl_7z.setStyleSheet(f"font-size: {self._font_px}px; color: #b0b0b0;")
 
         try:
             if backup and os.path.isdir(backup):
@@ -82,7 +89,7 @@ class HealthStrip(QWidget):
             usage = shutil.disk_usage(root)
             free_gib = usage.free / (1024**3)
             self._lbl_disk.setText(f"Free space on that drive: {free_gib:.1f} GiB")
-            self._lbl_disk.setStyleSheet("font-size: 12px; color: #cccccc;")
+            self._lbl_disk.setStyleSheet(f"font-size: {self._font_px}px; color: #cccccc;")
         except OSError:
             self._lbl_disk.setText("Free space: unknown")
-            self._lbl_disk.setStyleSheet("font-size: 12px; color: #b0b0b0;")
+            self._lbl_disk.setStyleSheet(f"font-size: {self._font_px}px; color: #b0b0b0;")

@@ -74,6 +74,21 @@ class StyleManager:
         """Green/red action buttons use saturated fills + dark text (not white on muted)."""
         return self.is_light_theme()
 
+    def ui_font_family_css(self) -> str:
+        """QSS font stack for UI chrome (Windows-first)."""
+        return (
+            '"Segoe UI", "Segoe UI Variable", "Segoe UI Variable Text", '
+            "Tahoma, sans-serif"
+        )
+
+    def ui_body_text_dark(self) -> str:
+        """Primary text on dark chrome (buttons, labels, menus) — one consistent shade."""
+        return "#ebebed"
+
+    def ui_body_text_light(self) -> str:
+        """Primary text on light chrome."""
+        return "#141418"
+
     def indicator_checkmark_uses_dark_ink(self) -> bool:
         """Custom painted checkmark should be dark (light-ish checkbox surface)."""
         return self.is_light_theme()
@@ -186,7 +201,7 @@ class StyleManager:
 
     def settings_primary_on_dialog_color(self) -> str:
         """Primary label text on the settings dialog background (e.g. nested rows)."""
-        return "#1a1a1e" if self.is_light_theme() else "#ffffff"
+        return self.ui_body_text_light() if self.is_light_theme() else self.ui_body_text_dark()
 
     def scroll_handle_accent_dark(self) -> str:
         r, g, b = _mix_rgb(self._r, self._g, self._b, 26, 26, 26, 0.35)
@@ -203,14 +218,20 @@ class StyleManager:
 
     def _main_window_qss_dark(self) -> str:
         a = self
+        body = a.ui_body_text_dark()
+        ff = a.ui_font_family_css()
         return f"""
             QMainWindow {{
                 background-color: #202020;
-                color: #e0e0e0;
+                color: {body};
+                font-family: {ff};
+                font-size: 11px;
             }}
             QWidget {{
                 background-color: #202020;
-                color: #e0e0e0;
+                color: {body};
+                font-family: {ff};
+                font-size: 11px;
             }}
             QTableWidget {{
                 background-color: #252526;
@@ -245,7 +266,7 @@ class StyleManager:
             }}
             QHeaderView::section {{
                 background-color: #2d2d30;
-                color: #cccccc;
+                color: {body};
                 padding: 4px 8px;
                 border: none;
                 border-right: 1px solid #3e3e42;
@@ -270,7 +291,7 @@ class StyleManager:
                     stop:0 #454548, stop:1 #2a2a2d);
                 border: 1px solid #3e3e42;
                 border-radius: 4px;
-                color: #cccccc;
+                color: {body};
                 min-height: 19px;
                 max-height: 19px;
                 height: 19px;
@@ -294,7 +315,7 @@ class StyleManager:
                 border-color: #2d2d30;
             }}
             QLabel {{
-                color: #cccccc;
+                color: {body};
             }}
             QScrollBar:vertical {{
                 background-color: #1a1a1a;
@@ -465,7 +486,7 @@ class StyleManager:
             }}
             QCheckBox {{
                 spacing: 6px;
-                color: #cccccc;
+                color: {body};
             }}
             QCheckBox::indicator {{
                 width: 12px;
@@ -508,14 +529,20 @@ class StyleManager:
 
     def _main_window_qss_light(self) -> str:
         a = self
+        body = a.ui_body_text_light()
+        ff = a.ui_font_family_css()
         return f"""
             QMainWindow {{
                 background-color: #f4f4f7;
-                color: #1a1a1e;
+                color: {body};
+                font-family: {ff};
+                font-size: 11px;
             }}
             QWidget {{
                 background-color: #f4f4f7;
-                color: #1a1a1e;
+                color: {body};
+                font-family: {ff};
+                font-size: 11px;
             }}
             QTableWidget {{
                 background-color: #ffffff;
@@ -550,7 +577,7 @@ class StyleManager:
             }}
             QHeaderView::section {{
                 background-color: #ececf2;
-                color: #2a2a32;
+                color: {body};
                 padding: 4px 8px;
                 border: none;
                 border-right: 1px solid #d8d8e0;
@@ -575,7 +602,7 @@ class StyleManager:
                     stop:0 #fafafc, stop:1 #e8e8ee);
                 border: 1px solid #c4c4ce;
                 border-radius: 4px;
-                color: #141418;
+                color: {body};
                 min-height: 19px;
                 max-height: 19px;
                 height: 19px;
@@ -599,7 +626,7 @@ class StyleManager:
                 border-color: #d4d4dc;
             }}
             QLabel {{
-                color: #2a2a32;
+                color: {body};
             }}
             QScrollBar:vertical {{
                 background-color: #e6e6ec;
@@ -770,7 +797,7 @@ class StyleManager:
             }}
             QCheckBox {{
                 spacing: 6px;
-                color: #2a2a32;
+                color: {body};
             }}
             QCheckBox::indicator {{
                 width: 12px;
@@ -818,12 +845,13 @@ class StyleManager:
 
     def _menu_qss_dark(self) -> str:
         a = self
+        body = a.ui_body_text_dark()
         return f"""
             QMenu {{
                 background-color: #1a1a1a;
                 border: 1px solid #404040;
                 border-radius: 4px;
-                color: #ffffff;
+                color: {body};
                 padding: 2px;
                 font-size: 11px;
             }}
@@ -833,11 +861,11 @@ class StyleManager:
             }}
             QMenu::item:selected {{
                 background-color: {a.rgba(120)};
-                color: #ffffff;
+                color: {body};
             }}
             QMenu::item:pressed {{
                 background-color: {a.rgba(200)};
-                color: #ffffff;
+                color: {body};
             }}
             QMenu::separator {{
                 height: 1px;
@@ -848,12 +876,13 @@ class StyleManager:
 
     def _menu_qss_light(self) -> str:
         a = self
+        body = a.ui_body_text_light()
         return f"""
             QMenu {{
                 background-color: #ffffff;
                 border: 1px solid #c8c8d4;
                 border-radius: 4px;
-                color: #1a1a1e;
+                color: {body};
                 padding: 2px;
                 font-size: 11px;
             }}
@@ -880,6 +909,255 @@ class StyleManager:
         if self.is_light_theme():
             return self._settings_dialog_qss_light()
         return self._settings_dialog_qss_dark()
+
+    def backup_estimate_browser_supplement_qss(self) -> str:
+        """
+        QTextBrowser pane (#252526) + grooved vertical scrollbar for the backup estimate dialog.
+        Appended after ``settings_dialog_qss()`` so scrollbars match the main window look.
+        """
+        a = self
+        if self.is_light_theme():
+            return f"""
+            QTextBrowser#backupEstimateBrowser {{
+                background-color: #f4f4f7;
+                color: #1a1a1e;
+                border: 1px solid #d0d0d8;
+                border-radius: 4px;
+                padding: 9px;
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar:vertical {{
+                background-color: #e6e6ec;
+                width: 14px;
+                margin: 14px 0 14px 0;
+                border: none;
+                border-radius: 7px;
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::add-page:vertical,
+            QTextBrowser#backupEstimateBrowser QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::handle:vertical {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #dedee4, stop:0.3 #e8e8ee, stop:0.5 #f0f0f4, stop:0.7 #e4e4ea, stop:1 #d6d6de);
+                min-height: 25px;
+                margin: 2px;
+                border-radius: 7px;
+                border: 1px solid #c8c8d2;
+                border-top: 1px solid #f4f4f8;
+                border-bottom: 1px solid #bcbcc8;
+                background-image: url("ui/scroll_groove.svg");
+                background-repeat: no-repeat;
+                background-position: center;
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::handle:vertical:hover,
+            QTextBrowser#backupEstimateBrowser QScrollBar::handle:vertical:pressed {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #eaeaf0, stop:0.5 #f4f4f8, stop:1 #e0e0e8);
+                border: 1px solid {a.rgba(200)};
+                background-image: url("ui/scroll_groove.svg");
+                background-repeat: no-repeat;
+                background-position: center;
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::sub-line:vertical,
+            QTextBrowser#backupEstimateBrowser QScrollBar::add-line:vertical {{
+                border: 1px solid #c8c8d2;
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #f0f0f4,
+                    stop:1 #e2e2ea
+                );
+                height: 14px;
+                subcontrol-origin: margin;
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::sub-line:vertical {{
+                subcontrol-position: top;
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::add-line:vertical {{
+                subcontrol-position: bottom;
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::sub-line:vertical:hover,
+            QTextBrowser#backupEstimateBrowser QScrollBar::add-line:vertical:hover {{
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #f6f6fa,
+                    stop:1 #eaeaf0
+                );
+                border: 2px solid {a.rgba(210)};
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::sub-line:vertical:pressed,
+            QTextBrowser#backupEstimateBrowser QScrollBar::add-line:vertical:pressed {{
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #d8d8e2,
+                    stop:1 #ceced8
+                );
+                border: 2px solid {a.rgba(255)};
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::up-arrow:vertical {{
+                width: 10px;
+                height: 8px;
+                image: url("ui/scroll_up.svg");
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::down-arrow:vertical {{
+                width: 10px;
+                height: 8px;
+                image: url("ui/scroll_down.svg");
+            }}
+            """
+        return f"""
+            QTextBrowser#backupEstimateBrowser {{
+                background-color: #252526;
+                color: #cccccc;
+                border: 1px solid #3e3e42;
+                border-radius: 4px;
+                padding: 9px;
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar:vertical {{
+                background-color: #1a1a1a;
+                width: 14px;
+                margin: 14px 0 14px 0;
+                border: none;
+                border-radius: 7px;
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::add-page:vertical,
+            QTextBrowser#backupEstimateBrowser QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::handle:vertical {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #2d2d30, stop:0.3 #3a3a3d, stop:0.5 #454548, stop:0.7 #3a3a3d, stop:1 #2d2d30);
+                min-height: 25px;
+                margin: 2px;
+                border-radius: 7px;
+                border: 1px solid #3e3e42;
+                border-top: 1px solid #404040;
+                border-bottom: 1px solid #1a1a1a;
+                background-image: url("ui/scroll_groove.svg");
+                background-repeat: no-repeat;
+                background-position: center;
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::handle:vertical:hover,
+            QTextBrowser#backupEstimateBrowser QScrollBar::handle:vertical:pressed {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #4a4a4d, stop:0.5 #505053, stop:1 #4a4a4d);
+                border: 1px solid {a.rgba(220)};
+                background-image: url("ui/scroll_groove.svg");
+                background-repeat: no-repeat;
+                background-position: center;
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::sub-line:vertical,
+            QTextBrowser#backupEstimateBrowser QScrollBar::add-line:vertical {{
+                border: 1px solid #3e3e42;
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #343437,
+                    stop:1 #252528
+                );
+                height: 14px;
+                subcontrol-origin: margin;
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::sub-line:vertical {{
+                subcontrol-position: top;
+                border-radius: 0px;
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::add-line:vertical {{
+                subcontrol-position: bottom;
+                border-radius: 0px;
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::sub-line:vertical:hover,
+            QTextBrowser#backupEstimateBrowser QScrollBar::add-line:vertical:hover {{
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #3f3f43,
+                    stop:1 #2c2c30
+                );
+                border: 1px solid {a.rgba(210)};
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::sub-line:vertical:pressed,
+            QTextBrowser#backupEstimateBrowser QScrollBar::add-line:vertical:pressed {{
+                background: qlineargradient(
+                    x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #2a2a2e,
+                    stop:1 #19191d
+                );
+                border: 1px solid {a.rgba(255)};
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::up-arrow:vertical {{
+                width: 10px;
+                height: 8px;
+                image: url("ui/scroll_up.svg");
+            }}
+            QTextBrowser#backupEstimateBrowser QScrollBar::down-arrow:vertical {{
+                width: 10px;
+                height: 8px;
+                image: url("ui/scroll_down.svg");
+            }}
+            """
+
+    def backup_estimate_start_backup_button_qss(self) -> str:
+        """Green primary action on the backup estimate dialog (matches main Backup button)."""
+        if self.is_light_theme():
+            return """
+            QPushButton#backupEstimateStartButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #7be879, stop:1 #2e9d3e);
+                border: 1px solid #1f8a32;
+                color: #0a1a0c;
+                min-height: 22px;
+                max-height: 22px;
+                height: 22px;
+                padding: 0px 12px;
+                font-size: 11px;
+                border-radius: 4px;
+                font-weight: 600;
+            }
+            QPushButton#backupEstimateStartButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #8ef48a, stop:1 #3ab84a);
+                border: 2px solid rgba(46, 125, 50, 220);
+                border-radius: 4px;
+            }
+            QPushButton#backupEstimateStartButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #248a34, stop:1 #1a6e28);
+            }
+            QPushButton#backupEstimateStartButton:disabled {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #ececf0, stop:1 #ececf0);
+                color: #9898a4;
+                border-color: #d4d4dc;
+            }
+            """
+        return """
+            QPushButton#backupEstimateStartButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #4a6a4a, stop:1 #2d4a2d);
+                border: 1px solid #4a6b4a;
+                color: #ffffff;
+                min-height: 22px;
+                max-height: 22px;
+                height: 22px;
+                padding: 0px 12px;
+                font-size: 11px;
+                border-radius: 4px;
+            }
+            QPushButton#backupEstimateStartButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #5a7a5a, stop:1 #3a5a3a);
+                border: 2px solid rgba(76, 175, 80, 200);
+                border-radius: 4px;
+            }
+            QPushButton#backupEstimateStartButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #2d4a2d, stop:1 #1f3d1f);
+            }
+            QPushButton#backupEstimateStartButton:disabled {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1e1e1e, stop:1 #1e1e1e);
+                color: #6a6a6a;
+                border-color: #2d2d30;
+            }
+            """
 
     def settings_tooltip_supplement_qss(self) -> str:
         """Merged onto QApplication.styleSheet while Settings is open (tooltips are not dialog children)."""
@@ -909,16 +1187,20 @@ class StyleManager:
         sd = a.scroll_handle_accent_dark()
         sm = a.scroll_handle_accent_mid()
         sb = a.accent_soft_border_hex()
+        body = a.ui_body_text_dark()
+        ff = a.ui_font_family_css()
         return f"""
             QDialog {{
                 background-color: #202020;
-                color: #ffffff;
+                color: {body};
+                font-family: {ff};
+                font-size: 11px;
             }}
             QWidget#settingsMainTabs {{
                 background-color: #202020;
             }}
             QLabel {{
-                color: #ffffff;
+                color: {body};
                 background-color: #202020;
             }}
             QWidget#settingsFramedPanel {{
@@ -952,7 +1234,7 @@ class StyleManager:
                     stop:0 #454548, stop:1 #2a2a2d);
                 border: 1px solid #3e3e42;
                 border-radius: 4px;
-                color: #cccccc;
+                color: {body};
                 min-height: 22px;
                 max-height: 22px;
                 height: 22px;
@@ -984,7 +1266,7 @@ class StyleManager:
                 background-color: #252526;
                 border: 1px solid #404040;
                 border-radius: 4px;
-                color: #ffffff;
+                color: {body};
                 padding: 0px 8px;
                 min-height: 22px;
                 max-height: 22px;
@@ -1013,13 +1295,13 @@ class StyleManager:
                 background-color: #202020;
                 border: 1px solid #404040;
                 selection-background-color: #3a3a3a;
-                color: #ffffff;
+                color: {body};
             }}
             #settingsFramedPanel QLineEdit {{
                 background-color: #252526;
                 border: 1px solid #404040;
                 border-radius: 4px;
-                color: #ffffff;
+                color: {body};
                 padding: 0px 8px;
                 min-height: 22px;
                 max-height: 22px;
@@ -1033,7 +1315,7 @@ class StyleManager:
             }}
             QCheckBox {{
                 spacing: 6px;
-                color: #ffffff;
+                color: {body};
                 background-color: #202020;
             }}
             #settingsFramedPanel QCheckBox {{
@@ -1257,7 +1539,7 @@ class StyleManager:
             }}
             #settingsMainTabs QTabBar::tab:selected {{
                 background-color: #252526;
-                color: #ffffff;
+                color: {body};
                 font-weight: 600;
                 font-size: 11px;
                 border: 1px solid #3e3e42;
@@ -1286,7 +1568,7 @@ class StyleManager:
                 subcontrol-position: top left;
                 left: 8px;
                 padding: 0 6px;
-                color: #ffffff;
+                color: {body};
                 background-color: #252526;
             }}
             QFormLayout {{
@@ -1299,16 +1581,20 @@ class StyleManager:
         sd = a.scroll_handle_accent_dark()
         sm = a.scroll_handle_accent_mid()
         sb = a.accent_soft_border_hex()
+        body = a.ui_body_text_light()
+        ff = a.ui_font_family_css()
         return f"""
             QDialog {{
                 background-color: #f4f4f7;
-                color: #1a1a1e;
+                color: {body};
+                font-family: {ff};
+                font-size: 11px;
             }}
             QWidget#settingsMainTabs {{
                 background-color: #f4f4f7;
             }}
             QLabel {{
-                color: #1a1a1e;
+                color: {body};
                 background-color: #f4f4f7;
             }}
             QWidget#settingsDatePreview,
@@ -1342,7 +1628,7 @@ class StyleManager:
                     stop:0 #fafafc, stop:1 #e8e8ee);
                 border: 1px solid #c4c4ce;
                 border-radius: 4px;
-                color: #141418;
+                color: {body};
                 min-height: 19px;
                 max-height: 19px;
                 height: 19px;
@@ -1374,7 +1660,7 @@ class StyleManager:
                 background-color: #ffffff;
                 border: 1px solid #c4c4cc;
                 border-radius: 4px;
-                color: #1a1a1e;
+                color: {body};
                 padding: 0px 8px;
                 min-height: 22px;
                 max-height: 22px;
@@ -1682,20 +1968,24 @@ class StyleManager:
     def _small_dialog_qss_dark(self) -> str:
         """Add Custom Game / First Backup Destination — compact dark dialogs."""
         a = self
+        body = a.ui_body_text_dark()
+        ff = a.ui_font_family_css()
         return f"""
             QDialog {{
                 background-color: #202020;
-                color: #ffffff;
+                color: {body};
+                font-family: {ff};
+                font-size: 11px;
             }}
             QLabel {{
-                color: #ffffff;
+                color: {body};
             }}
             QPushButton {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                     stop:0 #454548, stop:1 #2a2a2d);
                 border: 1px solid #3e3e42;
                 border-radius: 4px;
-                color: #cccccc;
+                color: {body};
                 min-height: 19px;
                 max-height: 19px;
                 height: 19px;
@@ -1716,11 +2006,11 @@ class StyleManager:
                 background-color: #202020;
                 border: 1px solid #404040;
                 border-radius: 4px;
-                color: #ffffff;
+                color: {body};
                 padding: 2px 8px;
             }}
             QCheckBox {{
-                color: #cccccc;
+                color: {body};
                 spacing: 6px;
             }}
             QCheckBox::indicator {{
@@ -1731,20 +2021,24 @@ class StyleManager:
 
     def _small_dialog_qss_light(self) -> str:
         a = self
+        body = a.ui_body_text_light()
+        ff = a.ui_font_family_css()
         return f"""
             QDialog {{
                 background-color: #f4f4f7;
-                color: #1a1a1e;
+                color: {body};
+                font-family: {ff};
+                font-size: 11px;
             }}
             QLabel {{
-                color: #1a1a1e;
+                color: {body};
             }}
             QPushButton {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                     stop:0 #fafafc, stop:1 #e8e8ee);
                 border: 1px solid #c4c4ce;
                 border-radius: 4px;
-                color: #141418;
+                color: {body};
                 min-height: 19px;
                 max-height: 19px;
                 height: 19px;
@@ -1765,11 +2059,11 @@ class StyleManager:
                 background-color: #ffffff;
                 border: 1px solid #c4c4cc;
                 border-radius: 4px;
-                color: #1a1a1e;
+                color: {body};
                 padding: 2px 8px;
             }}
             QCheckBox {{
-                color: #2a2a32;
+                color: {body};
                 spacing: 6px;
             }}
             QCheckBox::indicator {{
@@ -1785,40 +2079,148 @@ class StyleManager:
         return self._sandbox_monitor_window_qss_dark()
 
     def _sandbox_monitor_window_qss_dark(self) -> str:
-        return """
-            QMainWindow { background-color: #1e1e1e; color: #e0e0e0; }
-            QWidget { background-color: #1e1e1e; color: #e0e0e0; }
-            QTabWidget::pane { border: 1px solid #3e3e42; border-radius: 4px; top: -1px; background: #1e1e1e; }
-            QTabBar::tab {
-                background: #2d2d30; color: #cccccc; padding: 6px 14px; margin-right: 2px;
-                border: 1px solid #3e3e42; border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px;
-            }
-            QTabBar::tab:selected { background: #1e1e1e; color: #ffffff; font-weight: 600; }
-            QTabBar::tab:hover:!selected { background: #37373d; }
-            QPushButton {
+        body = self.ui_body_text_dark()
+        return f"""
+            QMainWindow {{ background-color: #1e1e1e; color: #e0e0e0; }}
+            QWidget {{ background-color: #1e1e1e; color: #e0e0e0; }}
+            QWidget#sandboxMainTabs {{
+                background-color: #1e1e1e;
+            }}
+            QWidget#sandboxFramedPanel {{
+                background-color: #252526;
+                border: none;
+                border-radius: 6px;
+            }}
+            #sandboxMainTabs QTabBar {{
+                background-color: transparent;
+                border: none;
+                padding: 0px;
+                margin: 0px;
+            }}
+            #sandboxMainTabs QTabBar::tab {{
+                background-color: transparent;
+                color: #8c8c8c;
+                border: 1px solid transparent;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                padding: 3px 6px 5px 6px;
+                margin-right: 2px;
+                margin-top: 0px;
+                margin-bottom: 0px;
+                font-size: 11px;
+                min-height: 0px;
+            }}
+            #sandboxMainTabs QTabBar::tab:last {{
+                margin-right: 0px;
+            }}
+            #sandboxMainTabs QTabBar::tab:selected {{
+                background-color: #252526;
+                color: {body};
+                font-weight: 600;
+                font-size: 11px;
+                border: 1px solid #3e3e42;
+                border-bottom: none;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                padding: 4px 8px 6px 8px;
+                margin-top: 0px;
+                margin-bottom: -1px;
+            }}
+            #sandboxMainTabs QTabBar::tab:hover:!selected {{
+                background-color: transparent;
+                color: #c8c8c8;
+            }}
+            QPushButton {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #454548, stop:1 #2a2a2d);
                 border: 1px solid #3e3e42; border-radius: 4px; color: #cccccc;
                 min-height: 19px; max-height: 19px; height: 19px; padding: 1px 12px; font-size: 11px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #505053, stop:1 #3a3a3d);
                 border: 2px solid #888888;
-            }
-            QCheckBox { color: #cccccc; font-size: 11px; spacing: 6px; }
+            }}
+            QCheckBox {{ color: #cccccc; font-size: 11px; spacing: 6px; }}
+            QWidget#sandboxDiagToolbar {{
+                background-color: transparent;
+            }}
+            QWidget#sandboxDiagToolbar QLabel {{
+                background-color: transparent;
+                color: #b0b0b0;
+                font-size: 11px;
+            }}
+            QLineEdit {{
+                background-color: #252526;
+                border: 1px solid #404040;
+                border-radius: 4px;
+                color: {body};
+                padding: 3px 8px;
+                font-size: 11px;
+                min-height: 20px;
+            }}
+            QSpinBox {{
+                background-color: #252526;
+                border: 1px solid #404040;
+                border-radius: 4px;
+                color: {body};
+                padding: 2px 4px;
+                font-size: 11px;
+                min-height: 20px;
+            }}
         """
 
     def _sandbox_monitor_window_qss_light(self) -> str:
         a = self
+        body = a.ui_body_text_light()
         return f"""
             QMainWindow {{ background-color: #f4f4f7; color: #1a1a1e; }}
             QWidget {{ background-color: #f4f4f7; color: #1a1a1e; }}
-            QTabWidget::pane {{ border: 1px solid #d0d0d8; border-radius: 4px; top: -1px; background: #f4f4f7; }}
-            QTabBar::tab {{
-                background: #ececf0; color: #2a2a32; padding: 6px 14px; margin-right: 2px;
-                border: 1px solid #d0d0d8; border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px;
+            QWidget#sandboxMainTabs {{
+                background-color: #f4f4f7;
             }}
-            QTabBar::tab:selected {{ background: #f4f4f7; color: #0a0a0c; font-weight: 600; }}
-            QTabBar::tab:hover:!selected {{ background: #e4e4ea; }}
+            QWidget#sandboxFramedPanel {{
+                background-color: #f4f4f7;
+                border: none;
+                border-radius: 6px;
+            }}
+            #sandboxMainTabs QTabBar {{
+                background-color: transparent;
+                border: none;
+                padding: 0px;
+                margin: 0px;
+            }}
+            #sandboxMainTabs QTabBar::tab {{
+                background-color: transparent;
+                color: #6a6a78;
+                border: 1px solid transparent;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                padding: 3px 6px 5px 6px;
+                margin-right: 2px;
+                margin-top: 0px;
+                margin-bottom: 0px;
+                font-size: 11px;
+                min-height: 0px;
+            }}
+            #sandboxMainTabs QTabBar::tab:last {{
+                margin-right: 0px;
+            }}
+            #sandboxMainTabs QTabBar::tab:selected {{
+                background-color: #f4f4f7;
+                color: #0a0a0c;
+                font-weight: 600;
+                font-size: 11px;
+                border: 1px solid #d0d0d8;
+                border-bottom: none;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                padding: 4px 8px 6px 8px;
+                margin-top: 0px;
+                margin-bottom: -1px;
+            }}
+            #sandboxMainTabs QTabBar::tab:hover:!selected {{
+                background-color: transparent;
+                color: #2a2a32;
+            }}
             QPushButton {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #fafafc, stop:1 #e8e8ee);
                 border: 1px solid #c4c4ce; border-radius: 4px; color: #141418;
@@ -1829,4 +2231,30 @@ class StyleManager:
                 border: 2px solid {a.rgba(200)};
             }}
             QCheckBox {{ color: #2a2a32; font-size: 11px; spacing: 6px; }}
+            QWidget#sandboxDiagToolbar {{
+                background-color: transparent;
+            }}
+            QWidget#sandboxDiagToolbar QLabel {{
+                background-color: transparent;
+                color: #5a5a68;
+                font-size: 11px;
+            }}
+            QLineEdit {{
+                background-color: #ffffff;
+                border: 1px solid #c4c4cc;
+                border-radius: 4px;
+                color: #1a1a1e;
+                padding: 3px 8px;
+                font-size: 11px;
+                min-height: 20px;
+            }}
+            QSpinBox {{
+                background-color: #ffffff;
+                border: 1px solid #c4c4cc;
+                border-radius: 4px;
+                color: #1a1a1e;
+                padding: 2px 4px;
+                font-size: 11px;
+                min-height: 20px;
+            }}
         """
