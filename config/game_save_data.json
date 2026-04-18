@@ -1,22 +1,26 @@
 {
     "Mafia II: Definitive Edition": {
         "steam_app_id": "1030830",
-        "save_path": "%USERPROFILE%\\Documents\\My Games\\Mafia II Definitive Edition\\Saves\\76561199633632614\\"
+        "save_path": "%USERPROFILE%\\Documents\\My Games\\Mafia II Definitive Edition\\Saves\\76561199633632614\\",
+        "last_backup": "2026-04-18T01:59:09.169283"
     },
     "Rogue Tower": {
         "steam_app_id": "1843760",
         "save_path": "",
         "save_registry_hive": "HKEY_CURRENT_USER",
         "save_registry_subkey": "Software\\Die of Death Games\\Rogue Tower",
-        "save_in_registry_only": true
+        "save_in_registry_only": true,
+        "last_backup": "2026-04-18T01:59:09.200278"
     },
     "Company of Heroes: Tales of Valor": {
         "steam_app_id": "20540",
-        "save_path": "%USERPROFILE%\\Documents\\My Games\\Company of Heroes Relaunch\\Savegames\\"
+        "save_path": "%USERPROFILE%\\Documents\\My Games\\Company of Heroes Relaunch\\Savegames\\",
+        "last_backup": "2026-04-18T01:59:10.021466"
     },
     "Warpips": {
         "steam_app_id": "1291010",
-        "save_path": "%USERPROFILE%\\AppData\\LocalLow\\Skirmish Mode Games\\Warpips\\"
+        "save_path": "%USERPROFILE%\\AppData\\LocalLow\\Skirmish Mode Games\\Warpips\\",
+        "last_backup": "2026-04-18T01:59:10.025683"
     },
     "Steamworks Common Redistributables": {
         "steam_app_id": "228980",
@@ -24,11 +28,13 @@
     },
     "Company of Heroes": {
         "steam_app_id": "228200",
-        "save_path": "%USERPROFILE%\\Documents\\My Games\\Company of Heroes Relaunch\\Savegames\\"
+        "save_path": "%USERPROFILE%\\Documents\\My Games\\Company of Heroes Relaunch\\Savegames\\",
+        "last_backup": "2026-04-18T01:59:13.587681"
     },
     "Company of Heroes 2": {
         "steam_app_id": "231430",
-        "save_path": "%USERPROFILE%\\Documents\\My Games\\Company of Heroes 2\\Savegames\\"
+        "save_path": "%USERPROFILE%\\Documents\\My Games\\Company of Heroes 2\\Savegames\\",
+        "last_backup": "2026-04-18T01:59:13.600176"
     },
     "Bee Island": {
         "steam_app_id": "2345020",
@@ -52,11 +58,13 @@
     },
     "Company of Heroes: Opposing Fronts": {
         "steam_app_id": "9340",
-        "save_path": "%USERPROFILE%\\Documents\\My Games\\Company of Heroes Relaunch\\Savegames\\"
+        "save_path": "%USERPROFILE%\\Documents\\My Games\\Company of Heroes Relaunch\\Savegames\\",
+        "last_backup": "2026-04-18T01:59:16.807574"
     },
     "LEGO\u00ae Star Wars\u2122 - The Complete Saga": {
         "steam_app_id": null,
-        "save_path": "%LOCALAPPDATA%\\LucasArts\\LEGO Star Wars - The Complete Saga\\SavedGames\\"
+        "save_path": "%LOCALAPPDATA%\\LucasArts\\LEGO Star Wars - The Complete Saga\\SavedGames\\",
+        "last_backup": "2026-04-18T01:59:16.810311"
     },
     "GOG GALAXY": {
         "steam_app_id": null,
@@ -72,12 +80,13 @@
     },
     "Battlefield\u2122 V": {
         "steam_app_id": "1238810",
-        "save_path": "%USERPROFILE%\\Documents\\Battlefield V\\settings\\"
+        "save_path": "%USERPROFILE%\\Documents\\Battlefield V\\settings\\",
+        "last_backup": "2026-04-18T01:59:16.823683"
     },
     "Battlefield 4\u2122": {
         "steam_app_id": null,
         "save_path": "%USERPROFILE%\\Documents\\Battlefield 4\\settings\\",
-        "last_backup": "2026-04-11T01:15:51.103492"
+        "last_backup": "2026-04-18T01:59:16.828560"
     },
     "World of Tanks EU": {
         "steam_app_id": null,

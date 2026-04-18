@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
     QMessageBox, QFileDialog, QProgressBar, QProgressDialog, QSystemTrayIcon, QMenu, QCheckBox,
-    QApplication, QGraphicsDropShadowEffect, QStyledItemDelegate, QGraphicsOpacityEffect,
+    QApplication, QDialog, QGraphicsDropShadowEffect, QStyledItemDelegate, QGraphicsOpacityEffect,
     QToolButton, QWidgetAction,
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSettings, QThreadPool, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty, QPoint, QSize
@@ -52,7 +52,7 @@ from core.game_detector import GameDetector
 from core.save_manager import SaveManager
 from styles.manager import StyleManager
 from ui.custom_dialogs import AddCustomGameDialog, SettingsDialog, FirstBackupDestinationDialog
-from ui.health_strip import HealthStrip
+from ui.backup_estimate_dialog import BackupEstimatePromptDialog
 from ui.shortcuts_dialog import ShortcutsDialog
 from ui.workers import (
     AutoBackupWorker,
@@ -455,13 +455,6 @@ class MainWindow(QMainWindow):
         self.table_container.set_accent_color(self._styles.accent_qcolor())
         self.main_layout.addWidget(self.table_container)
 
-        self.health_strip = HealthStrip(self)
-        self.main_layout.addWidget(self.health_strip)
-        self._health_timer = QTimer(self)
-        self._health_timer.setInterval(45_000)
-        self._health_timer.timeout.connect(self.health_strip.refresh)
-        self._health_timer.start()
-
         self.status_label = QLabel("Ready.")
         self.status_label.setStyleSheet("font-size: 11px;")
         self.main_layout.addWidget(self.status_label)
@@ -549,20 +542,39 @@ class MainWindow(QMainWindow):
         self.filter_button.clicked.connect(self._cycle_filter_state)
         bottom_layout.addWidget(self.filter_button)
 
-        self.tools_button = QToolButton()
-        self.tools_button.setText("Tools")
-        self.tools_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonInstantPopup)
-        self.tools_button.setToolTip("Export/import game list, keyboard shortcuts")
+        # Composite Tools button: [ Tools | ▲ ] — same visual language as Scan
+        self.tools_main_button = QPushButton("Tools")
+        self.tools_main_button.setObjectName("tools_main_button")
+        self.tools_main_button.setToolTip("Tools menu (export / import / shortcuts)")
+        self.tools_main_button.clicked.connect(self._show_tools_menu_above)
+        arrow_icon_path_tools = os.path.join(os.path.dirname(__file__), "scroll_up.svg")
+        self.tools_arrow_button = QToolButton()
+        self.tools_arrow_button.setObjectName("tools_arrow_button")
+        self.tools_arrow_button.setFixedWidth(18)
+        self.tools_arrow_button.setFixedHeight(19)
+        self.tools_arrow_button.setIcon(QIcon(arrow_icon_path_tools))
+        self.tools_arrow_button.setIconSize(QSize(8, 6))
+        self.tools_arrow_button.clicked.connect(self._show_tools_menu_above)
+
         self._tools_menu = QMenu(self)
         self._tools_menu.setStyleSheet(self._styles.menu_qss())
         self._tools_menu.addAction("Export game list (JSON)…", self._export_catalog_json)
         self._tools_menu.addAction("Export game list (CSV)…", self._export_catalog_csv)
+        self._tools_menu.addSeparator()
         self._tools_menu.addAction("Import game list (JSON)…", self._import_catalog_json)
         self._tools_menu.addAction("Import game list (CSV)…", self._import_catalog_csv)
         self._tools_menu.addSeparator()
         self._tools_menu.addAction("Shortcuts and tips…", self._show_shortcuts_dialog)
-        self.tools_button.setMenu(self._tools_menu)
-        bottom_layout.addWidget(self.tools_button)
+
+        self.tools_button_container = QWidget()
+        self.tools_button_container.setObjectName("tools_button_container")
+        tools_layout = QHBoxLayout(self.tools_button_container)
+        tools_layout.setContentsMargins(0, 0, 0, 0)
+        tools_layout.setSpacing(0)
+        tools_layout.addWidget(self.tools_main_button)
+        tools_layout.addWidget(self.tools_arrow_button)
+        self._apply_tools_button_style()
+        bottom_layout.addWidget(self.tools_button_container)
 
         self.settings_button = QPushButton("Settings")
         self.settings_button.setEnabled(True)
@@ -582,7 +594,6 @@ class MainWindow(QMainWindow):
 
         # Perform the heavier post-construction setup once everything above exists
         self._set_scan_button_idle_text()
-        self.health_strip.refresh()
         if self._sandbox_monitor:
             self._sandbox_log(
                 "sandbox",
@@ -719,6 +730,106 @@ class MainWindow(QMainWindow):
             """
         )
 
+    def _apply_tools_button_style(self) -> None:
+        """Match composite Scan styling for the Tools split button."""
+        if not hasattr(self, "tools_button_container"):
+            return
+        sm = StyleManager.instance()
+        if sm.is_light_theme():
+            bg_top = "#f4f4f8"
+            bg_bottom = "#e6e6ee"
+            border_color = "#c4c4ce"
+            hover_border = sm.rgba(200)
+            disabled_bg = "stop:0 #ececf0, stop:1 #e4e4ea"
+            ch_top, ch_bottom = "#ffffff", "#efeff4"
+            cd_border = "#d4d4dc"
+            main_color = "#141418"
+            dis_color = "#9898a4"
+            sp_top, sp_bottom = "#d8d8e2", "#ceced8"
+            arrow_dis_border = "#d0d0d8"
+        else:
+            bg_top = "#3a3a3d"
+            bg_bottom = "#2d2d30"
+            border_color = "#3e3e42"
+            hover_border = sm.rgba(200)
+            disabled_bg = "stop:0 #1e1e1e, stop:1 #1e1e1e"
+            ch_top, ch_bottom = "#505053", "#3a3a3d"
+            cd_border = "#2d2d30"
+            main_color = "#ffffff"
+            dis_color = "#6a6a6a"
+            sp_top, sp_bottom = "#2d2d30", "#1e1e1e"
+            arrow_dis_border = "#2d2d30"
+
+        self.tools_button_container.setStyleSheet(
+            f"""
+            QWidget#tools_button_container {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 {bg_top}, stop:1 {bg_bottom});
+                border: 1px solid {border_color};
+                border-radius: 4px;
+            }}
+            QWidget#tools_button_container:hover:enabled {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 {ch_top}, stop:1 {ch_bottom});
+                border: 2px solid {hover_border};
+                border-radius: 4px;
+            }}
+            QWidget#tools_button_container:disabled {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    {disabled_bg});
+                border: 1px solid {cd_border};
+                border-radius: 4px;
+            }}
+            QPushButton#tools_main_button {{
+                background: transparent;
+                border: none;
+                color: {main_color};
+                font-size: 11px;
+                min-height: 19px;
+                max-height: 19px;
+                height: 19px;
+                padding: 1px 12px;
+            }}
+            QPushButton#tools_main_button:disabled {{
+                background: transparent;
+                border: none;
+                color: {dis_color};
+            }}
+            QPushButton#tools_main_button:hover {{
+                background: transparent;
+                border: none;
+            }}
+            QPushButton#tools_main_button:pressed {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 {sp_top}, stop:1 {sp_bottom});
+                border: none;
+            }}
+            QToolButton#tools_arrow_button {{
+                background: transparent;
+                border: none;
+                min-height: 19px;
+                max-height: 19px;
+                height: 19px;
+                padding: 0 4px;
+                border-left: 1px solid {border_color};
+            }}
+            QToolButton#tools_arrow_button:disabled {{
+                background: transparent;
+                border-left: 1px solid {arrow_dis_border};
+                color: {dis_color};
+            }}
+            QToolButton#tools_arrow_button::menu-indicator {{
+                image: none;
+                width: 0px;
+            }}
+            QToolButton#tools_arrow_button:pressed {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 {sp_top}, stop:1 {sp_bottom});
+                border: none;
+            }}
+            """
+        )
+
     def _set_scan_button_label_only(self) -> None:
         """Set only the label text for the scan button (no caret)."""
         if hasattr(self, "scan_button"):
@@ -767,6 +878,8 @@ class MainWindow(QMainWindow):
         self.scan_menu.setStyleSheet(self._styles.menu_qss())
         if hasattr(self, "tray_menu"):
             self.tray_menu.setStyleSheet(self._styles.menu_qss())
+        if hasattr(self, "_tools_menu"):
+            self._tools_menu.setStyleSheet(self._styles.menu_qss())
         self._apply_tray_cancel_button_style()
         self.update_scan_button_style(is_cancel=self.is_scanning)
         if getattr(self, "_compress_running", False):
@@ -783,6 +896,15 @@ class MainWindow(QMainWindow):
         global_top_right = self.scan_arrow_button.mapToGlobal(self.scan_arrow_button.rect().topRight())
         pos = QPoint(global_top_right.x() - menu_size.width(), global_top_right.y() - menu_size.height())
         self.scan_menu.popup(pos)
+
+    def _show_tools_menu_above(self) -> None:
+        """Show the Tools menu above the split button (same placement idea as Scan)."""
+        if not hasattr(self, "_tools_menu") or not hasattr(self, "tools_arrow_button"):
+            return
+        menu_size = self._tools_menu.sizeHint()
+        global_top_right = self.tools_arrow_button.mapToGlobal(self.tools_arrow_button.rect().topRight())
+        pos = QPoint(global_top_right.x() - menu_size.width(), global_top_right.y() - menu_size.height())
+        self._tools_menu.popup(pos)
 
     def _resolved_backup_dest_for_auto_backup(self) -> str:
         """Return a usable on-disk backup root for auto-backup, or empty string."""
@@ -1031,6 +1153,7 @@ class MainWindow(QMainWindow):
         self.progress_bar.set_track_color(self._styles.progress_bar_track_color())
         self._apply_compress_summary_label_theme()
         self.apply_button_colors()
+        self._apply_tools_button_style()
 
     def _apply_compress_summary_label_theme(self) -> None:
         if not hasattr(self, "compress_summary_label"):
@@ -1575,8 +1698,6 @@ class MainWindow(QMainWindow):
             self.status_label.setText("Settings saved.")
             if self._sandbox_monitor:
                 self._sandbox_monitor.apply_app_style()
-            if hasattr(self, "health_strip"):
-                self.health_strip.refresh()
 
     def refresh_backup_dates(self):
         """Refresh all backup dates in the table with the current date format"""
@@ -2527,8 +2648,6 @@ class MainWindow(QMainWindow):
 
     def _prompt_backup_start(self, games_to_backup, destination_folder, est):
         """Ask for confirmation and/or show size estimate. ``est`` may be None."""
-        from utils.backup_estimate import estimate_summary_text
-
         n = len(games_to_backup)
         want_confirm = self.settings.value("confirm_before_backup", False, type=bool)
         if est is None and not want_confirm:
@@ -2545,23 +2664,14 @@ class MainWindow(QMainWindow):
                 )
                 == QMessageBox.StandardButton.Yes
             )
-        summary = estimate_summary_text(est, n)
-        if want_confirm:
-            msg = f"Back up {n} game(s) to:\n{destination_folder}\n\n{summary}\n\nContinue?"
-            title = "Confirm backup"
-        else:
-            msg = f"{summary}\n\nStart backup now?"
-            title = "Backup estimate"
-        return (
-            QMessageBox.question(
-                self,
-                title,
-                msg,
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes,
-            )
-            == QMessageBox.StandardButton.Yes
+        dlg = BackupEstimatePromptDialog(
+            self,
+            est,
+            n,
+            destination_folder,
+            want_confirm=want_confirm,
         )
+        return dlg.exec() == QDialog.DialogCode.Accepted
 
     def _run_backup_estimate_async(self, games_to_backup, destination_folder, subfolder_per_game):
         prog = QProgressDialog(self)
@@ -2684,8 +2794,6 @@ class MainWindow(QMainWindow):
         self.populate_games_from_cache()
         self._update_backup_compress_buttons()
         self._apply_filter()
-        if hasattr(self, "health_strip"):
-            self.health_strip.refresh()
 
     def _show_shortcuts_dialog(self):
         dlg = ShortcutsDialog(self)
