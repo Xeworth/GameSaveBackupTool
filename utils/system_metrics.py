@@ -19,9 +19,12 @@ def psutil_available() -> bool:
     return _PSUTIL
 
 
-def snapshot() -> Dict[str, Any]:
+def snapshot(*, lite: bool = False) -> Dict[str, Any]:
     """
     Return a dict safe to show in the UI. Keys are always present; values may be None if psutil is missing.
+
+    ``lite=True`` skips the heaviest probes (per-core CPU, ``open_files()``) so periodic UI updates
+    do not block the Qt main thread (noticeable as window-drag jitter when the sandbox monitor runs).
     """
     out: Dict[str, Any] = {
         "psutil": _PSUTIL,
@@ -39,7 +42,8 @@ def snapshot() -> Dict[str, Any]:
         return out
     try:
         out["cpu_percent"] = psutil.cpu_percent(interval=None)
-        out["cpu_per_core"] = psutil.cpu_percent(interval=None, percpu=True)
+        if not lite:
+            out["cpu_per_core"] = psutil.cpu_percent(interval=None, percpu=True)
         vm = psutil.virtual_memory()
         out["ram_percent"] = vm.percent
         out["ram_used_gb"] = round(vm.used / (1024**3), 2)
@@ -47,11 +51,12 @@ def snapshot() -> Dict[str, Any]:
         proc = psutil.Process()
         out["process_rss_mb"] = round(proc.memory_info().rss / (1024**2), 1)
         out["process_cpu_percent"] = proc.cpu_percent(interval=None)
-        try:
-            of = proc.open_files()
-            out["open_files"] = len(of) if of is not None else None
-        except (psutil.AccessDenied, OSError, NotImplementedError, AttributeError):
-            out["open_files"] = None
+        if not lite:
+            try:
+                of = proc.open_files()
+                out["open_files"] = len(of) if of is not None else None
+            except (psutil.AccessDenied, OSError, NotImplementedError, AttributeError):
+                out["open_files"] = None
     except Exception:
         pass
     return out

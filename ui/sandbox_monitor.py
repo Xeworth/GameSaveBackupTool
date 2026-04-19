@@ -12,11 +12,12 @@ from collections import deque
 from datetime import datetime
 from typing import Any, Deque, Dict, List, Optional
 
-from PyQt6.QtCore import Qt, QSettings, QTimer
+from PyQt6.QtCore import QByteArray, Qt, QSettings, QTimer
 from PyQt6.QtGui import QFont, QKeySequence, QShortcut, QTextCursor
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QDialog,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -76,8 +77,13 @@ class SandboxMonitorWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("GSBT Sandbox Monitor")
-        self.resize(820, 540)
         self.setMinimumSize(480, 320)
+        self._settings = QSettings("MyCompany", settings_app_name())
+        geom = self._settings.value("sandbox_monitor_geometry")
+        if isinstance(geom, QByteArray) and not geom.isEmpty():
+            self.restoreGeometry(geom)
+        else:
+            self.resize(820, 540)
         self._compression_test_n = 0
 
         self._live_buf: Deque[str] = deque(maxlen=self.MAX_LOG_BLOCKS)
@@ -90,8 +96,10 @@ class SandboxMonitorWindow(QMainWindow):
         self._disk_write_failures = 0
         self._disk_error_log_milestone = 0
         self._last_tab_idx: int = 0
-        self._settings = QSettings("MyCompany", settings_app_name())
         self._compression_intro_active = True
+        self._main_window: Any = None
+
+        self.menuBar().setVisible(False)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -173,6 +181,11 @@ class SandboxMonitorWindow(QMainWindow):
             "Choose which categories are written to the Live log (scan, compression ticks, metrics, …)."
         )
         self._btn_log_settings.clicked.connect(self._open_log_settings)
+        self._btn_defaults = QPushButton("Defaults…")
+        self._btn_defaults.setToolTip(
+            "Ignore saved backup paths, cached game list, or simulate 7-Zip install state for UI testing."
+        )
+        self._btn_defaults.clicked.connect(self._open_sandbox_defaults_dialog)
         row2.addWidget(self._follow_tail_cb)
         row2.addWidget(self._btn_scroll_latest)
         row2.addWidget(QLabel("N:"))
@@ -183,6 +196,13 @@ class SandboxMonitorWindow(QMainWindow):
         row2.addWidget(self._btn_copy_since_marker)
         row2.addSpacing(12)
         row2.addWidget(self._btn_log_settings)
+        row2.addWidget(self._btn_defaults)
+        self._btn_show_main = QPushButton("Show main window")
+        self._btn_show_main.setToolTip(
+            "Bring the Game Save Backup Tool window back when you closed it but kept the monitor open."
+        )
+        self._btn_show_main.clicked.connect(self._on_show_main_window_clicked)
+        row2.addWidget(self._btn_show_main)
         row2.addStretch(1)
         diag_outer.addLayout(row2)
 
@@ -331,8 +351,9 @@ class SandboxMonitorWindow(QMainWindow):
         self._render_plain_tab(3, scroll=False)
 
         self._timer = QTimer(self)
+        self._timer.setTimerType(Qt.TimerType.CoarseTimer)
         self._timer.timeout.connect(self._on_tick)
-        self._timer.start(500)
+        self._timer.start(1000)
         self._on_tick()
 
         self.log_line("Sandbox monitor ready. Fresh QSettings scope; use this log for compression & scan timings.")
@@ -343,6 +364,39 @@ class SandboxMonitorWindow(QMainWindow):
         self._append_history_plain(self._compression_history_intro_html())
 
         self.apply_app_style()
+
+    def set_main_window(self, window: Any) -> None:
+        """Main app window; used to apply Defaults overrides without restarting."""
+        self._main_window = window
+
+    def _open_sandbox_defaults_dialog(self) -> None:
+        from ui.sandbox_defaults_dialog import SandboxDefaultsDialog
+
+        dlg = SandboxDefaultsDialog(self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        dlg.apply_to_settings()
+        mw = self._main_window
+        if mw is not None:
+            mw.apply_sandbox_defaults_refresh()
+
+    def refresh_show_main_button(self) -> None:
+        """Enable **Show main window** when the main window is hidden (sandbox)."""
+        if not hasattr(self, "_btn_show_main"):
+            return
+        mw = self._main_window
+        self._btn_show_main.setEnabled(mw is not None and not mw.isVisible())
+
+    def _on_show_main_window_clicked(self) -> None:
+        mw = self._main_window
+        if mw is None:
+            return
+        if mw.isMinimized():
+            mw.showNormal()
+        mw.show()
+        mw.raise_()
+        mw.activateWindow()
+        self.refresh_show_main_button()
 
     # --- Buffers & rendering -------------------------------------------------
 
@@ -729,11 +783,12 @@ class SandboxMonitorWindow(QMainWindow):
         )
 
     def _on_tick(self) -> None:
-        s = snapshot()
+        s = snapshot(lite=True)
         base = format_snapshot_line(s)
         if self._disk_write_failures:
             base += f"  |  Disk mirror write errors: {self._disk_write_failures}"
         self._status.setText(base)
+        self.refresh_show_main_button()
 
     def _mirror_fetch_to_disk(self, line: str) -> None:
         if not self._mirror_disk_cb.isChecked():
@@ -759,7 +814,7 @@ class SandboxMonitorWindow(QMainWindow):
         nc = self._normalize_log_category(category, message)
         msg = message
         if read_log_setting(self._settings, "show_compress_hw_inline") and nc in _COMPRESS_HW_SUFFIX_CATEGORIES:
-            suf = format_inline_hw_snapshot(snapshot())
+            suf = format_inline_hw_snapshot(snapshot(lite=True))
             if suf:
                 msg = f"{message}  |  {suf}"
         ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -918,5 +973,7 @@ class SandboxMonitorWindow(QMainWindow):
         QApplication.clipboard().setText("\n".join(self._batch_buf))
 
     def closeEvent(self, event):
-        """Closing the monitor does not quit the main window."""
+        """Closing the monitor does not quit the main window; remember position for next run."""
+        self._settings.setValue("sandbox_monitor_geometry", self.saveGeometry())
+        self._settings.sync()
         event.accept()

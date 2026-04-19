@@ -7,6 +7,7 @@ Kept separate from ``main_window`` to keep the UI module focused on layout and s
 from __future__ import annotations
 
 import difflib
+import math
 import os
 import re
 import shutil
@@ -805,19 +806,40 @@ def _collect_files_for_zip(backup_root: str) -> Tuple[List[Tuple[str, str]], int
     return out, total_bytes, len(out)
 
 
-def _rough_7z_percent(zip_size: int, total_uncompressed: int) -> int:
-    """Map growing archive size to 0–92% while 7-Zip runs (heuristic)."""
+def _seven_zip_ui_percent(zip_size: int, total_uncompressed: int, elapsed_sec: float, arch_fmt: str) -> int:
+    """
+    Progress while 7-Zip runs: blends archive growth on disk with elapsed time.
+
+    In-flight percent is capped at **95**; the worker then emits **100** on success so the last
+    tick before completion reads ~95% rather than the mid‑80s.
+    """
     if total_uncompressed <= 0:
-        return 0
-    lo = max(total_uncompressed * 0.02, 1024 * 1024)
-    hi = max(total_uncompressed * 0.45, lo * 2)
+        blended = int(78 * (1.0 - math.exp(-elapsed_sec / 12.0)))
+        return min(95, max(0, int(blended * 1.115 + 1.5)))
+
+    lo = max(int(total_uncompressed * 0.012), 256 * 1024)
+    hi_ratio = 0.32 if arch_fmt == "7z" else 0.55
+    hi = max(int(total_uncompressed * hi_ratio), lo * 2)
+
     if zip_size <= 0:
-        return 0
-    if zip_size >= hi:
-        return 92
-    if zip_size <= lo:
-        return max(1, min(20, int(20 * zip_size / lo)))
-    return int(20 + 72 * (zip_size - lo) / (hi - lo))
+        sz_pct = 0
+    elif zip_size >= hi:
+        sz_pct = 90
+    elif zip_size <= lo:
+        sz_pct = max(1, min(16, int(15 * zip_size / max(lo, 1))))
+    else:
+        sz_pct = int(16 + 76 * (zip_size - lo) / max(hi - lo, 1))
+
+    total_mb = max(1e-9, total_uncompressed / (1024.0 * 1024.0))
+    wall_guess = max(6.0, min(90.0, 4.5 + (total_mb**0.5) * 2.4 + total_mb * 0.05))
+    est_sec = max(3.2, min(36.0, wall_guess * 0.42))
+    ratio = 1.0 - math.exp(-elapsed_sec / est_sec)
+    time_pct = int(94 * (ratio**0.48))
+
+    blended = max(sz_pct, time_pct)
+    # Map mid‑high raw blend to ~95 as the last in-flight tick (mx 6–8 was ending ~84–88%).
+    scaled = int(blended * 1.115 + 1.5)
+    return min(95, max(0, scaled))
 
 
 def _human_bytes(num: int) -> str:
@@ -885,12 +907,20 @@ class CompressBackupWorker(QThread):
     finished = pyqtSignal(bool, str)
     compression_metrics = pyqtSignal(object)
 
-    def __init__(self, backup_folder_path: str, options: Optional[CompressionOptions] = None, parent=None):
+    def __init__(
+        self,
+        backup_folder_path: str,
+        options: Optional[CompressionOptions] = None,
+        parent=None,
+        *,
+        detailed_7z_status: bool = False,
+    ):
         super().__init__(parent)
         self.backup_folder_path = backup_folder_path
         self.options = options or CompressionOptions.default_zip_balanced()
         self._cancelled = False
         self._seven_proc: Optional[subprocess.Popen] = None
+        self._detailed_7z_status = detailed_7z_status
 
     def cancel(self):
         self._cancelled = True
@@ -1040,6 +1070,8 @@ class CompressBackupWorker(QThread):
         t0 = time.perf_counter()
         last_metric_emit = t0
         last_ui_pct = -1
+        last_ui_emit_wall = t0
+        monotonic_floor = 0
 
         try:
             self._seven_proc = subprocess.Popen(
@@ -1069,11 +1101,18 @@ class CompressBackupWorker(QThread):
                     return
 
                 zsz = os.path.getsize(out_abs) if os.path.isfile(out_abs) else 0
-                pct = _rough_7z_percent(zsz, total_bytes)
-                if pct != last_ui_pct:
-                    last_ui_pct = pct
-                    self.progress_percent.emit(pct)
                 now = time.perf_counter()
+                elapsed = now - t0
+                combined = _seven_zip_ui_percent(zsz, total_bytes, elapsed, arch_fmt)
+                combined = max(combined, monotonic_floor)
+                monotonic_floor = combined
+                if (
+                    combined > last_ui_pct
+                    or (combined == last_ui_pct and now - last_ui_emit_wall >= 0.22)
+                ):
+                    last_ui_pct = combined
+                    last_ui_emit_wall = now
+                    self.progress_percent.emit(combined)
                 if now - last_metric_emit >= 0.45:
                     elapsed = now - t0
                     mib_s = (zsz / (1024 * 1024)) / elapsed if elapsed > 0 else 0.0
@@ -1091,7 +1130,13 @@ class CompressBackupWorker(QThread):
                         }
                     )
                     last_metric_emit = now
-                    self.progress.emit(f"7-Zip… {pct}% (~{zsz // (1024 * 1024)} MiB on disk)")
+                    pct_shown = max(last_ui_pct, 0)
+                    if self._detailed_7z_status:
+                        self.progress.emit(
+                            f"7-Zip… {pct_shown}% (~{zsz // (1024 * 1024)} MiB on disk)"
+                        )
+                    else:
+                        self.progress.emit(f"Compressing... {pct_shown}%")
                 time.sleep(0.25)
 
             rc = self._seven_proc.returncode

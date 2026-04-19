@@ -572,6 +572,15 @@ class MainWindow(QMainWindow):
         self.add_manual_button.clicked.connect(self.add_custom_game)
         bottom_layout.addWidget(self.add_manual_button)
 
+        self._sandbox_monitor_show_button: QPushButton | None = None
+        if self._sandbox_monitor is not None:
+            self._sandbox_monitor_show_button = QPushButton("Monitor")
+            self._sandbox_monitor_show_button.setToolTip(
+                "Show the sandbox monitor window (metrics and logs). Use this if you closed it."
+            )
+            self._sandbox_monitor_show_button.clicked.connect(self._show_sandbox_monitor_window)
+            bottom_layout.addWidget(self._sandbox_monitor_show_button)
+
         bottom_layout.addStretch(1)
 
         # Load saved filter state first, default to "found" for new users
@@ -597,7 +606,9 @@ class MainWindow(QMainWindow):
         self._tools_menu.addAction("About Game Save Backup Tool…", self._show_about_dialog)
 
         tools_tip = (
-            "Tools: backup folder & disk health, export/import, shortcuts (F1), about"
+            "<html><body style='margin: 8px 23px;'>"
+            "<p style='margin:0;'>Tools: backup folder &amp; disk health, export/import,<br/>"
+            "shortcuts (F1), about.</p></body></html>"
         )
         self.tools_button = ToolsMenuButton("Tools")
         self.tools_button.setObjectName("tools_menu_button")
@@ -634,6 +645,14 @@ class MainWindow(QMainWindow):
     def _sandbox_log(self, category: str, message: str) -> None:
         if self._sandbox_monitor:
             self._sandbox_monitor.log_line(message, category)
+
+    def _show_sandbox_monitor_window(self) -> None:
+        """Re-show the sandbox monitor after the user closed it (sandbox mode only)."""
+        if self._sandbox_monitor is None:
+            return
+        self._sandbox_monitor.show()
+        self._sandbox_monitor.raise_()
+        self._sandbox_monitor.activateWindow()
 
     def _apply_scan_button_style(self, is_cancel: bool = False) -> None:
         """
@@ -779,7 +798,7 @@ class MainWindow(QMainWindow):
                 border-radius: 4px;
                 color: {main_color};
                 font-size: 11px;
-                padding: 1px 14px 1px 6px;
+                padding: 1px 19px 1px 11px;
                 min-height: 19px;
                 max-height: 19px;
                 height: 19px;
@@ -814,7 +833,7 @@ class MainWindow(QMainWindow):
                 border-radius: 4px;
                 color: {main_color};
                 font-size: 11px;
-                padding: 1px 14px 1px 6px;
+                padding: 1px 19px 1px 11px;
                 min-height: 19px;
                 max-height: 19px;
                 height: 19px;
@@ -908,10 +927,10 @@ class MainWindow(QMainWindow):
 
     def _resolved_backup_dest_for_auto_backup(self) -> str:
         """Return a usable on-disk backup root for auto-backup, or empty string."""
-        backup_dest = self.settings.value("default_backup_path", "", type=str)
+        backup_dest = self._effective_default_backup_path()
         if backup_dest and os.path.exists(backup_dest):
             return backup_dest
-        backup_dest = self.settings.value("last_backup_path", "", type=str)
+        backup_dest = self._effective_last_backup_path()
         if backup_dest and os.path.exists(backup_dest):
             return backup_dest
         return ""
@@ -1105,10 +1124,9 @@ class MainWindow(QMainWindow):
             
         self.last_backup_times[game_name] = now
         
-        backup_dest = self.settings.value("default_backup_path", "")
+        backup_dest = self._effective_default_backup_path()
         if not backup_dest or not os.path.exists(backup_dest):
-            # Fallback to last_backup_path for backward compatibility
-            backup_dest = self.settings.value("last_backup_path", "")
+            backup_dest = self._effective_last_backup_path()
             if not backup_dest or not os.path.exists(backup_dest):
                 return
             
@@ -1626,6 +1644,49 @@ class MainWindow(QMainWindow):
         """Hide the main window"""
         self.hide()
 
+    def _sandbox_resolve_quit(self) -> str:
+        """
+        Sandbox: how to exit when the monitor window is still open.
+        Returns ``quit_all`` | ``hide_main`` | ``cancel``.
+        """
+        from config.app_config import SANDBOX
+        from config import sandbox_defaults as sdef
+
+        if not SANDBOX:
+            return "quit_all"
+        mon = getattr(self, "_sandbox_monitor", None)
+        if mon is None or not mon.isVisible():
+            return "quit_all"
+        if sdef.quit_exit_remember():
+            return "quit_all" if sdef.quit_exit_close_monitor_with_main() else "hide_main"
+
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Icon.Question)
+        msg.setWindowTitle("Close Game Save Backup Tool")
+        msg.setText("The Sandbox Monitor is still open.")
+        msg.setInformativeText(
+            "Close the main window and the monitor together, or close only the main window and keep "
+            "the monitor open?\n\n"
+            "If you keep the monitor, use **Show main window** on the monitor toolbar to bring this "
+            "window back.\n\n"
+            "Keyboard: Tab to move focus, Space activates the focused button, Esc cancels."
+        )
+        btn_both = msg.addButton("Close both", QMessageBox.ButtonRole.AcceptRole)
+        btn_main = msg.addButton("Main window only", QMessageBox.ButtonRole.ActionRole)
+        cancel_btn = msg.addButton(QMessageBox.StandardButton.Cancel)
+        msg.setDefaultButton(btn_both)
+        cb = QCheckBox("Remember my choice for next time")
+        msg.setCheckBox(cb)
+        msg.exec()
+        clicked = msg.clickedButton()
+        if clicked in (cancel_btn, None):
+            return "cancel"
+        if cb.isChecked():
+            sdef.set_quit_exit_preference(True, clicked == btn_both)
+        if clicked == btn_main:
+            return "hide_main"
+        return "quit_all"
+
     def graceful_quit(self):
         """Gracefully quit the application, stopping any active scans first"""
         # If scanning is active, cancel it first
@@ -1635,13 +1696,21 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(500, self.quit_application)
         else:
             self.quit_application()
-    
+
     def quit_application(self):
-        """Quit the application completely"""
-        self._save_settings()
-        if hasattr(self, 'tray_icon'):
-            self.tray_icon.hide()
-        QApplication.instance().quit()
+        """Quit the application completely (honours sandbox monitor close choice)."""
+        decision = self._sandbox_resolve_quit()
+        if decision == "cancel":
+            return
+        if decision == "hide_main":
+            self._save_settings()
+            if hasattr(self, "tray_icon"):
+                self.tray_icon.hide()
+            self.hide()
+            if self._sandbox_monitor is not None:
+                self._sandbox_monitor.refresh_show_main_button()
+            return
+        self._do_quit(None)
 
 
 
@@ -1726,15 +1795,19 @@ class MainWindow(QMainWindow):
                 self.game_table_widget.setItem(row, 3, backup_item)
     
     def _load_settings(self):
+        from config.sandbox_defaults import ignore_saved_backup_paths
+
         geometry = self.settings.value("geometry")
-        if geometry: self.restoreGeometry(geometry)
-        self.last_backup_path = self.settings.value("last_backup_path", "")
-        
-        # Load default backup path from settings (if not set, use last_backup_path)
-        default_backup_path = self.settings.value("default_backup_path", "", type=str)
-        if not default_backup_path and self.last_backup_path:
-            # If default is not set but last_backup_path exists, use it as default
-            self.settings.setValue("default_backup_path", self.last_backup_path)
+        if geometry:
+            self.restoreGeometry(geometry)
+        if ignore_saved_backup_paths():
+            self.last_backup_path = ""
+        else:
+            self.last_backup_path = self.settings.value("last_backup_path", "")
+            # Load default backup path from settings (if not set, use last_backup_path)
+            default_backup_path = self.settings.value("default_backup_path", "", type=str)
+            if not default_backup_path and self.last_backup_path:
+                self.settings.setValue("default_backup_path", self.last_backup_path)
         
         # Load column widths and ensure they're integers
         # Only save/load Game Name column width (others are fixed)
@@ -1748,7 +1821,47 @@ class MainWindow(QMainWindow):
         self.settings.setValue("game_name_column_width", self.game_table_widget.columnWidth(0))
         # Save current filter state
         self._save_filter_state()
-        
+
+    def _effective_default_backup_path(self) -> str:
+        from config.sandbox_defaults import ignore_saved_backup_paths
+
+        if ignore_saved_backup_paths():
+            return ""
+        d = self.settings.value("default_backup_path", "", type=str)
+        if d:
+            return d
+        lp = self.last_backup_path or self.settings.value("last_backup_path", "", type=str)
+        return lp or ""
+
+    def _effective_last_backup_path(self) -> str:
+        from config.sandbox_defaults import ignore_saved_backup_paths
+
+        if ignore_saved_backup_paths():
+            return ""
+        return self.last_backup_path or self.settings.value("last_backup_path", "", type=str) or ""
+
+    def apply_sandbox_defaults_refresh(self) -> None:
+        """Re-apply Defaults menu overrides from the sandbox monitor (sandbox mode only)."""
+        from config.sandbox_defaults import ignore_cached_game_list, ignore_saved_backup_paths
+
+        if ignore_saved_backup_paths():
+            self.last_backup_path = ""
+        else:
+            self.last_backup_path = self.settings.value("last_backup_path", "", type=str)
+            default_backup_path = self.settings.value("default_backup_path", "", type=str)
+            if not default_backup_path and self.last_backup_path:
+                self.settings.setValue("default_backup_path", self.last_backup_path)
+        if ignore_cached_game_list():
+            self.game_table_widget.setRowCount(0)
+            self.status_label.setText(
+                "Sandbox: cached game list ignored. Use Scan to populate, or change Defaults → Saved settings."
+            )
+            self._update_backup_compress_buttons()
+            self._apply_filter()
+        else:
+            self.game_table_widget.setRowCount(0)
+            self.populate_games_from_cache()
+
     def closeEvent(self, event):
         """Handle window close event - minimize to tray if enabled; optionally suggest compress on exit."""
         minimize_to_tray = self.settings.value("minimize_to_tray", True, type=bool)
@@ -1765,7 +1878,7 @@ class MainWindow(QMainWindow):
             return
         # Actually exiting
         ask_compress = self.settings.value("ask_compress_on_exit", True, type=bool)
-        backup_path = self.settings.value("default_backup_path", "", type=str) or self.settings.value("last_backup_path", "", type=str)
+        backup_path = self._effective_default_backup_path() or self._effective_last_backup_path()
         if ask_compress and backup_path and os.path.isdir(backup_path):
             reply = QMessageBox.question(
                 self,
@@ -1782,10 +1895,26 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 self.compress_backups(then_exit=True)
                 return
+        decision = self._sandbox_resolve_quit()
+        if decision == "cancel":
+            event.ignore()
+            return
+        if decision == "hide_main":
+            event.ignore()
+            self._save_settings()
+            if hasattr(self, "tray_icon"):
+                self.tray_icon.hide()
+            self.hide()
+            if self._sandbox_monitor is not None:
+                self._sandbox_monitor.refresh_show_main_button()
+            return
         self._do_quit(event)
 
     def _do_quit(self, event=None):
         """Perform actual quit: save, hide tray; teardown runs once on ``aboutToQuit``."""
+        mon = getattr(self, "_sandbox_monitor", None)
+        if mon is not None and mon.isVisible():
+            mon.close()
         self._save_settings()
         if hasattr(self, 'tray_icon'):
             self.tray_icon.hide()
@@ -2155,8 +2284,16 @@ class MainWindow(QMainWindow):
                 self.game_table_widget.setRowHidden(row, has_save_path)
 
     def populate_games_from_cache(self):
+        from config.sandbox_defaults import ignore_cached_game_list
+
+        if ignore_cached_game_list():
+            self.status_label.setText(
+                "Sandbox: cached game list ignored. Use Scan to populate, or change Defaults → Saved settings."
+            )
+            return
         cached_games = self.save_manager.game_save_locations
-        if not cached_games: return
+        if not cached_games:
+            return
         self.status_label.setText(f"Loaded {len(cached_games)} games from cache. Click 'Scan' for fresh data.")
         found_count = 0
         not_found_count = 0
@@ -2454,7 +2591,10 @@ class MainWindow(QMainWindow):
         self.update_scan_button_style(is_cancel=False)
         self.add_manual_button.setEnabled(True)
         self._update_backup_compress_buttons()
-        self.progress_bar.setValue(100)  # Show completion, will reset on next scan
+        # Reset to 0–100 before 100% so we are not stuck at value == game count from per-game updates
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setValue(100)  # Full bar; compress path will setValue(0) when starting
         self.status_label.setText(f"Scan complete. Found data for {self.game_table_widget.rowCount()} games.")
         if self._should_show_notification():
             self._show_tray_notification("Scan complete", f"Found data for {self.game_table_widget.rowCount()} games.", QSystemTrayIcon.MessageIcon.Information, 2000)
@@ -2618,11 +2758,11 @@ class MainWindow(QMainWindow):
                 return
 
         # Resolve destination folder: use settings, or show first-backup dialog
-        default_backup_path = self.settings.value("default_backup_path", "", type=str)
+        default_backup_path = self._effective_default_backup_path()
         if default_backup_path and os.path.exists(default_backup_path):
             destination_folder = default_backup_path
         else:
-            fallback = self.last_backup_path or self.settings.value("last_backup_path", "", type=str) or os.path.expanduser("~")
+            fallback = self._effective_last_backup_path() or os.path.expanduser("~")
             dialog = FirstBackupDestinationDialog(self, initial_path=fallback)
             if not dialog.exec():
                 return
@@ -2632,15 +2772,8 @@ class MainWindow(QMainWindow):
 
         subfolder_per_game = self.settings.value("backup_subfolder_per_game", True, type=bool)
         want_est = self.settings.value("show_backup_estimate", True, type=bool)
-        want_confirm = self.settings.value("confirm_before_backup", False, type=bool)
 
-        if not want_est and not want_confirm:
-            self._start_backup_worker(games_to_backup, destination_folder, subfolder_per_game)
-            return
-
-        if not want_est and want_confirm:
-            if not self._prompt_backup_start(games_to_backup, destination_folder, None):
-                return
+        if not want_est:
             self._start_backup_worker(games_to_backup, destination_folder, subfolder_per_game)
             return
 
@@ -2662,29 +2795,16 @@ class MainWindow(QMainWindow):
         self.backup_worker.start()
 
     def _prompt_backup_start(self, games_to_backup, destination_folder, est):
-        """Ask for confirmation and/or show size estimate. ``est`` may be None."""
-        n = len(games_to_backup)
-        want_confirm = self.settings.value("confirm_before_backup", False, type=bool)
-        if est is None and not want_confirm:
+        """Show the backup size estimate dialog. ``est`` must be non-None (estimate succeeded)."""
+        if est is None:
             return True
-        if est is None and want_confirm:
-            msg = f"Back up {n} game(s) to:\n{destination_folder}\n\nContinue?"
-            return (
-                QMessageBox.question(
-                    self,
-                    "Confirm backup",
-                    msg,
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.No,
-                )
-                == QMessageBox.StandardButton.Yes
-            )
+        n = len(games_to_backup)
         dlg = BackupEstimatePromptDialog(
             self,
             est,
             n,
             destination_folder,
-            want_confirm=want_confirm,
+            want_confirm=False,
         )
         return dlg.exec() == QDialog.DialogCode.Accepted
 
@@ -2724,8 +2844,6 @@ class MainWindow(QMainWindow):
                 QMessageBox.StandardButton.No,
             )
             if q != QMessageBox.StandardButton.Yes:
-                return
-            if not self._prompt_backup_start(games_to_backup, destination_folder, None):
                 return
             self._start_backup_worker(games_to_backup, destination_folder, subfolder_per_game)
 
@@ -2854,9 +2972,9 @@ class MainWindow(QMainWindow):
         """Zip the default backup folder. If then_exit, quit the app when done. from_tray=True when started from tray menu."""
         if getattr(self, "_compress_running", False):
             return  # Guard: do not start a second compression (e.g. tray menu clicked again)
-        backup_path = self.settings.value("default_backup_path", "", type=str)
+        backup_path = self._effective_default_backup_path()
         if not backup_path:
-            backup_path = self.settings.value("last_backup_path", "", type=str)
+            backup_path = self._effective_last_backup_path()
         if not backup_path or not os.path.isdir(backup_path):
             QMessageBox.warning(
                 self,
@@ -2888,11 +3006,17 @@ class MainWindow(QMainWindow):
         self.compress_button.setText("Cancel")
         self.compress_button.setEnabled(True)
         self._set_compress_button_cancel_style()
-        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(100)
         self.progress_bar.setValue(0)
         if hasattr(self.progress_bar, 'animated_show'):
             self.progress_bar.animated_show()
-        self.compress_worker = CompressBackupWorker(backup_path, comp_opts, self)
+        self.compress_worker = CompressBackupWorker(
+            backup_path,
+            comp_opts,
+            self,
+            detailed_7z_status=bool(self._sandbox_monitor),
+        )
         self.compress_worker.progress.connect(lambda msg: self.status_label.setText(msg))
         self.compress_worker.progress_percent.connect(self.progress_bar.setValue)
         self.compress_worker.progress_percent.connect(self._on_compress_progress)

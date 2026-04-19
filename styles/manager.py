@@ -1225,10 +1225,6 @@ class StyleManager:
             QWidget#settingsSevenZipPathRow {{
                 background-color: transparent;
             }}
-            QWidget#settingsCompressPromoSection {{
-                background-color: #252526;
-                border: none;
-            }}
             QPushButton {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                     stop:0 #454548, stop:1 #2a2a2d);
@@ -1618,10 +1614,6 @@ class StyleManager:
             }}
             QWidget#settingsSevenZipPathRow {{
                 background-color: transparent;
-            }}
-            QWidget#settingsCompressPromoSection {{
-                background-color: #f4f4f7;
-                border: none;
             }}
             QPushButton {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,

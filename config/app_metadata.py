@@ -1,6 +1,6 @@
-"""Single source for version / credits shown in Settings and About."""
+"""Single source for version / credits shown in About."""
 
 APP_NAME = "Game Save Backup Tool"
-APP_VERSION_DISPLAY = "v1.5.2.190825"
-APP_COPYRIGHT = "© Xeworth"
+APP_VERSION_DISPLAY = "v2.0.1.200426"
+APP_COPYRIGHT = "© 2026 Xeworth"
 SOURCE_REPOSITORY_URL = "https://github.com/Xeworth/GameSaveBackupTool"

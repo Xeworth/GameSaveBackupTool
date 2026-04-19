@@ -19,7 +19,7 @@ class AboutDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(f"About {APP_NAME}")
         self.setModal(True)
-        self.setFixedSize(420, 220)
+        self.setFixedSize(480, 220)
         sm = StyleManager.instance()
         self.setStyleSheet(sm.settings_dialog_qss())
         muted = sm.settings_version_muted_color()
@@ -54,13 +54,16 @@ class AboutDialog(QDialog):
         link.setStyleSheet(f"font-size: 10px; color: {muted};")
         lay.addWidget(link)
 
-        blurb = QLabel(
-            "Distributed as open source; portable builds may be published separately "
-            "from the repository releases page."
-        )
+        blurb = QLabel()
+        blurb.setTextFormat(Qt.TextFormat.RichText)
         blurb.setWordWrap(True)
         blurb.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        blurb.setStyleSheet(f"font-size: 9px; color: {muted};")
+        blurb.setText(
+            f"<div style='padding: 4px 20px; font-size: 9px; color: {muted};'>"
+            "Distributed as open source; portable builds may be published separately "
+            "from the repository releases page."
+            "</div>"
+        )
         lay.addWidget(blurb)
 
         lay.addSpacing(9)

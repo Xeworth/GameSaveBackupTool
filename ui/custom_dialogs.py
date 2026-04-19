@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QWidget,
     QProgressDialog,
     QApplication,
+    QSizePolicy,
 )
 
 from PyQt6.QtCore import QSettings, QTimer, Qt, QRect, QSize, QPropertyAnimation, QEasingCurve, pyqtProperty
@@ -26,7 +27,11 @@ from datetime import datetime
 
 from core.compression import find_7zip_executable
 from config.app_config import DEFAULT_UI_THEME, normalize_ui_theme
-from config.app_metadata import APP_COPYRIGHT, APP_VERSION_DISPLAY
+from config.sandbox_defaults import (
+    compression_dialog_7zip_installed_override,
+    effective_default_backup_path_for_settings,
+    seven_zip_ui_override,
+)
 from styles.manager import StyleManager
 from ui.settings_framed_tabs import SettingsFramedTabs
 from ui.seven_zip_install_worker import SevenZipInstallWorker
@@ -268,8 +273,8 @@ class SettingsDialog(QDialog):
         # Fixed dialog dimensions
         self.setMinimumWidth(470)
         self.setMaximumWidth(470)
-        self.setMinimumHeight(430)
-        self.setMaximumHeight(430)
+        self.setMinimumHeight(404)
+        self.setMaximumHeight(404)
 
         _sm = StyleManager.instance()
         _sm.set_theme(normalize_ui_theme(self.settings.value("ui_theme", DEFAULT_UI_THEME, type=str)))
@@ -336,11 +341,6 @@ class SettingsDialog(QDialog):
         self.auto_backup_checkbox.toggled.connect(update_auto_backup_state)
         update_auto_backup_state(self.auto_backup_checkbox.isChecked())
 
-        self.confirm_before_backup_checkbox = CustomCheckBox("Ask for confirmation when clicking Backup")
-        self.confirm_before_backup_checkbox.setChecked(self.settings.value("confirm_before_backup", False, type=bool))
-        self.confirm_before_backup_checkbox.setToolTip("Show a confirmation dialog before starting a backup.")
-        backup_form.addRow(self.confirm_before_backup_checkbox)
-
         self.show_backup_estimate_checkbox = CustomCheckBox("Show backup size estimate before starting backup")
         self.show_backup_estimate_checkbox.setChecked(self.settings.value("show_backup_estimate", True, type=bool))
         self.show_backup_estimate_checkbox.setToolTip(
@@ -370,7 +370,7 @@ class SettingsDialog(QDialog):
         self.backup_folder_layout.setContentsMargins(0, 0, 0, 0)
         self.backup_folder_layout.setSpacing(spacing_px)
         self.backup_folder_input = QLineEdit()
-        self.backup_folder_input.setText(self.settings.value("default_backup_path", "", type=str))
+        self.backup_folder_input.setText(effective_default_backup_path_for_settings(self.settings))
         self.backup_folder_input.setReadOnly(True)
         self.backup_folder_input.setStyleSheet(_sm.settings_path_input_style())
         browse_backup_button = QPushButton("Browse...")
@@ -424,7 +424,9 @@ class SettingsDialog(QDialog):
         compress_form.setContentsMargins(0, 0, 0, 0)
 
         self.compression_preset_combo = QComboBox()
-        self.compression_preset_combo.setMinimumWidth(300)
+        self.compression_preset_combo.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         for label, key in (
             ("Store (no compression, fastest)", "store"),
             ("ZIP - fast deflate (~1 CPU core)", "deflate_fast"),
@@ -449,31 +451,21 @@ class SettingsDialog(QDialog):
 
         self._lbl_compression_engine = QLabel("Compression engine:")
         self._lbl_compression_engine.setToolTip(_engine_tt)
-        compress_form.addRow(self._lbl_compression_engine, self.compression_preset_combo)
 
         self.get_7zip_button = QPushButton("Get 7-Zip…")
         self.get_7zip_button.setToolTip(
             "Download and silently install a pinned official 7-Zip build (confirmation explains details)."
         )
         self.get_7zip_button.clicked.connect(self._on_get_7zip_clicked)
+        self.get_7zip_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
-        self._compress_engine_slot = QWidget()
-        self._compress_engine_slot.setObjectName("settingsCompressPromoSection")
-        self._compress_engine_slot.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self._compress_engine_slot.setMinimumHeight(44)
-        _engine_slot_layout = QVBoxLayout(self._compress_engine_slot)
-        _engine_slot_layout.setContentsMargins(0, spacing_px // 2, 0, spacing_px // 2)
-        _engine_slot_layout.setSpacing(0)
-        _engine_slot_layout.addStretch(1)
-        _get_7z_btn_row = QHBoxLayout()
-        _get_7z_btn_row.setContentsMargins(0, 0, 0, 0)
-        _get_7z_btn_row.setSpacing(0)
-        _get_7z_btn_row.addStretch(1)
-        _get_7z_btn_row.addWidget(self.get_7zip_button)
-        _get_7z_btn_row.addStretch(1)
-        _engine_slot_layout.addLayout(_get_7z_btn_row)
-        _engine_slot_layout.addStretch(1)
-        compress_form.addRow(self._compress_engine_slot)
+        self._compress_engine_row = QWidget()
+        _engine_row_lay = QHBoxLayout(self._compress_engine_row)
+        _engine_row_lay.setContentsMargins(0, 0, 0, 0)
+        _engine_row_lay.setSpacing(spacing_px)
+        _engine_row_lay.addWidget(self.compression_preset_combo, 1)
+        _engine_row_lay.addWidget(self.get_7zip_button, 0)
+        compress_form.addRow(self._lbl_compression_engine, self._compress_engine_row)
 
         self.compression_7z_hint = QLabel()
         self.compression_7z_hint.setObjectName("compression7zHint")
@@ -551,8 +543,9 @@ class SettingsDialog(QDialog):
         self._sync_compression_sub_ui()
 
         compress_outer.addLayout(compress_form)
-        compress_outer.addStretch(1)
+        compress_outer.addSpacing(6)
         compress_outer.addWidget(self.compression_7z_hint)
+        compress_outer.addStretch(1)
         self._settings_tabs.addTab(compress_tab, "Compress backups")
 
         # --- Themes ---
@@ -653,24 +646,10 @@ class SettingsDialog(QDialog):
 
         self.main_layout.addWidget(self._settings_tabs, 1)
 
-        # Bottom row with buttons and version info (9px gap is handled by main_layout spacing)
+        # Bottom row: OK / Cancel (version and credits are in Tools → About)
         bottom_layout = QHBoxLayout()
         bottom_layout.setContentsMargins(0, 0, 0, 0)
         bottom_layout.setSpacing(spacing_px)
-        version_layout = QHBoxLayout()
-        version_layout.setContentsMargins(0, 0, 0, 0)
-        version_layout.setSpacing(spacing_px)
-        version_label = QLabel(APP_VERSION_DISPLAY)
-        version_label.setStyleSheet(
-            f"font-size: 9px; color: {_sm.settings_version_muted_color()};"
-        )
-        version_layout.addWidget(version_label)
-        copyright_label = QLabel(APP_COPYRIGHT)
-        copyright_label.setStyleSheet(
-            f"font-size: 9px; color: {_sm.settings_version_muted_color()};"
-        )
-        version_layout.addWidget(copyright_label)
-        bottom_layout.addLayout(version_layout)
         bottom_layout.addStretch(1)
         button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         button_box.accepted.connect(self.accept)
@@ -717,6 +696,9 @@ class SettingsDialog(QDialog):
         custom = self.compression_7z_path_input.text().strip().strip('"')
         if custom and os.path.isfile(custom):
             return True
+        ovr = compression_dialog_7zip_installed_override(False)
+        if ovr is not None:
+            return ovr
         return find_7zip_executable() is not None
 
     def showEvent(self, event):
@@ -771,7 +753,13 @@ class SettingsDialog(QDialog):
         if custom and os.path.isfile(custom):
             det = custom
         else:
-            det = find_7zip_executable() or "not found"
+            mode = seven_zip_ui_override()
+            if mode == "absent":
+                det = "not found (sandbox: simulated)"
+            elif mode == "present":
+                det = find_7zip_executable() or r"C:\Program Files\7-Zip\7z.exe (sandbox: simulated installed)"
+            else:
+                det = find_7zip_executable() or "not found"
         zf = self.compression_7z_format_combo.currentData()
         if zf == "7z":
             extra = "With .7z + LZMA2, all CPU cores are used efficiently. "
@@ -779,7 +767,7 @@ class SettingsDialog(QDialog):
             extra = "With .zip + Deflate, multithreading helps most when there are many separate files. "
         if det == "not found":
             tail = (
-                "No 7-Zip executable found. Use Get 7-Zip (Windows) in the slot above, or Browse to point at 7z.exe."
+                "No 7-Zip executable found. Use Get 7-Zip (Windows) beside the engine list, or Browse to point at 7z.exe."
                 if sys.platform == "win32"
                 else "No 7-Zip executable found. Install 7-Zip for your platform or use Browse to point at 7z.exe."
             )
@@ -881,7 +869,6 @@ class SettingsDialog(QDialog):
         self.settings.setValue("run_on_startup_enabled", new_startup_mode != "disabled")
         self.settings.setValue("minimize_to_tray", self.minimize_to_tray_checkbox.isChecked())
         self.settings.setValue("skip_not_found_games", self.skip_not_found_checkbox.isChecked())
-        self.settings.setValue("confirm_before_backup", self.confirm_before_backup_checkbox.isChecked())
         self.settings.setValue("show_backup_estimate", self.show_backup_estimate_checkbox.isChecked())
         self.settings.setValue("ask_compress_on_exit", self.ask_compress_on_exit_checkbox.isChecked())
         self.settings.setValue("backup_subfolder_per_game", self.backup_subfolder_per_game_checkbox.isChecked())

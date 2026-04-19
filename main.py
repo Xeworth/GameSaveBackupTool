@@ -72,6 +72,7 @@ def main():
 
     window = MainWindow(sandbox_monitor=sandbox_monitor)
     if sandbox_monitor is not None:
+        sandbox_monitor.set_main_window(window)
         sandbox_monitor.apply_app_style()
         sandbox_monitor.show()
         sandbox_monitor.raise_()
