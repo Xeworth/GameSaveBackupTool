@@ -507,18 +507,16 @@ class StyleManager:
                     stop:0 #202020, stop:1 #1a1a1a);
             }}
             QCheckBox::indicator:checked {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {a.accent_checkbox_checked_top()}, stop:1 {a.accent_checkbox_checked_bottom()});
-                border: 2px solid {a.rgba(255)};
+                background-color: transparent;
+                border: 2px solid {a.rgba(220)};
             }}
             QCheckBox::indicator:checked:hover {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {a.accent_checkbox_checked_hover_top()}, stop:1 {a.accent_checkbox_checked_hover_bottom()});
+                background-color: transparent;
                 border: 2px solid {a.rgba(255)};
             }}
             QCheckBox::indicator:checked:pressed {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {a.accent_checkbox_checked_pressed_top()}, stop:1 {a.accent_checkbox_checked_pressed_bottom()});
+                background-color: transparent;
+                border: 2px solid {a.rgba(255)};
             }}
             QCheckBox::indicator:disabled {{
                 background: #202020;
@@ -798,6 +796,7 @@ class StyleManager:
             QCheckBox {{
                 spacing: 6px;
                 color: {body};
+                background-color: transparent;
             }}
             QCheckBox::indicator {{
                 width: 12px;
@@ -818,18 +817,16 @@ class StyleManager:
                     stop:0 #e4e4ea, stop:1 #d8d8e2);
             }}
             QCheckBox::indicator:checked {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {a.accent_checkbox_checked_top_light()}, stop:1 {a.accent_checkbox_checked_bottom_light()});
+                background-color: transparent;
                 border: 2px solid {a.rgba(220)};
             }}
             QCheckBox::indicator:checked:hover {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {a.accent_checkbox_checked_hover_top_light()}, stop:1 {a.accent_checkbox_checked_hover_bottom_light()});
+                background-color: transparent;
                 border: 2px solid {a.rgba(255)};
             }}
             QCheckBox::indicator:checked:pressed {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {a.accent_checkbox_checked_pressed_top_light()}, stop:1 {a.accent_checkbox_checked_pressed_bottom_light()});
+                background-color: transparent;
+                border: 2px solid {a.rgba(255)};
             }}
             QCheckBox::indicator:disabled {{
                 background: #ececf0;
@@ -1100,9 +1097,9 @@ class StyleManager:
             return """
             QPushButton#backupEstimateStartButton {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #7be879, stop:1 #2e9d3e);
-                border: 1px solid #1f8a32;
-                color: #0a1a0c;
+                    stop:0 #c4f7c0, stop:1 #5cc068);
+                border: 1px solid #4aad58;
+                color: #0a1810;
                 min-height: 22px;
                 max-height: 22px;
                 height: 22px;
@@ -1113,13 +1110,13 @@ class StyleManager:
             }
             QPushButton#backupEstimateStartButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #8ef48a, stop:1 #3ab84a);
-                border: 2px solid rgba(46, 125, 50, 220);
+                    stop:0 #d2fad0, stop:1 #6cc875);
+                border: 2px solid rgba(56, 142, 60, 200);
                 border-radius: 4px;
             }
             QPushButton#backupEstimateStartButton:pressed {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #248a34, stop:1 #1a6e28);
+                    stop:0 #4aad55, stop:1 #2e8b40);
             }
             QPushButton#backupEstimateStartButton:disabled {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -1336,18 +1333,16 @@ class StyleManager:
                     stop:0 #1e1e1e, stop:1 #1a1a1a);
             }}
             QCheckBox::indicator:checked {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {a.accent_checkbox_checked_top()}, stop:1 {a.accent_checkbox_checked_bottom()});
-                border: 2px solid {a.rgba(255)};
+                background-color: transparent;
+                border: 2px solid {a.rgba(220)};
             }}
             QCheckBox::indicator:checked:hover {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {a.accent_checkbox_checked_hover_top()}, stop:1 {a.accent_checkbox_checked_hover_bottom()});
+                background-color: transparent;
                 border: 2px solid {a.rgba(255)};
             }}
             QCheckBox::indicator:checked:pressed {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {a.accent_checkbox_checked_pressed_top()}, stop:1 {a.accent_checkbox_checked_pressed_bottom()});
+                background-color: transparent;
+                border: 2px solid {a.rgba(255)};
             }}
             QCheckBox::indicator:disabled {{
                 background: #1e1e1e;
@@ -1356,6 +1351,15 @@ class StyleManager:
             }}
             QWidget#settingsTabPage {{
                 background-color: #252526;
+            }}
+            QWidget#settingsSectionSeparatorWrap {{
+                background-color: transparent;
+            }}
+            #settingsFramedPanel QFrame#settingsSectionSeparator {{
+                background-color: #3e3e42;
+                border: none;
+                min-height: 1px;
+                max-height: 1px;
             }}
             QScrollBar:vertical {{
                 background-color: #1a1a1a;
@@ -1591,19 +1595,22 @@ class StyleManager:
             }}
             QLabel {{
                 color: {body};
-                background-color: #f4f4f7;
+                background-color: transparent;
             }}
             QWidget#settingsDatePreview,
             QWidget#settingsDatePreview QLabel {{
                 background-color: transparent;
             }}
             QWidget#settingsFramedPanel {{
-                background-color: #f4f4f7;
+                background-color: #ffffff;
                 border: none;
                 border-radius: 6px;
             }}
+            QWidget#settingsTabPage {{
+                background-color: #ffffff;
+            }}
             #settingsFramedPanel QLabel {{
-                background-color: #f4f4f7;
+                background-color: #ffffff;
             }}
             #settingsFramedPanel QLabel#settingsSevenZipExeLabel {{
                 background-color: transparent;
@@ -1614,6 +1621,15 @@ class StyleManager:
             }}
             QWidget#settingsSevenZipPathRow {{
                 background-color: transparent;
+            }}
+            QWidget#settingsSectionSeparatorWrap {{
+                background-color: transparent;
+            }}
+            #settingsFramedPanel QFrame#settingsSectionSeparator {{
+                background-color: #d0d0d8;
+                border: none;
+                min-height: 1px;
+                max-height: 1px;
             }}
             QPushButton {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -1718,7 +1734,7 @@ class StyleManager:
                 margin-right: 0px;
             }}
             #settingsMainTabs QTabBar::tab:selected {{
-                background-color: #f4f4f7;
+                background-color: #ffffff;
                 color: #0a0a0c;
                 font-weight: 600;
                 font-size: 11px;
@@ -1737,7 +1753,7 @@ class StyleManager:
             #settingsFramedPanel QCheckBox {{
                 spacing: 6px;
                 color: #1a1a1e;
-                background-color: #f4f4f7;
+                background-color: transparent;
             }}
             QCheckBox::indicator {{
                 width: 12px;
@@ -1758,18 +1774,16 @@ class StyleManager:
                     stop:0 #e4e4ea, stop:1 #d8d8e2);
             }}
             QCheckBox::indicator:checked {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {a.accent_checkbox_checked_top_light()}, stop:1 {a.accent_checkbox_checked_bottom_light()});
+                background-color: transparent;
                 border: 2px solid {a.rgba(220)};
             }}
             QCheckBox::indicator:checked:hover {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {a.accent_checkbox_checked_hover_top_light()}, stop:1 {a.accent_checkbox_checked_hover_bottom_light()});
+                background-color: transparent;
                 border: 2px solid {a.rgba(255)};
             }}
             QCheckBox::indicator:checked:pressed {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {a.accent_checkbox_checked_pressed_top_light()}, stop:1 {a.accent_checkbox_checked_pressed_bottom_light()});
+                background-color: transparent;
+                border: 2px solid {a.rgba(255)};
             }}
             QCheckBox::indicator:disabled {{
                 background: #ececf0;
@@ -2071,7 +2085,8 @@ class StyleManager:
         return self._sandbox_monitor_window_qss_dark()
 
     def _sandbox_monitor_window_qss_dark(self) -> str:
-        body = self.ui_body_text_dark()
+        sm = self
+        body = sm.ui_body_text_dark()
         return f"""
             QMainWindow {{ background-color: #1e1e1e; color: #e0e0e0; }}
             QWidget {{ background-color: #1e1e1e; color: #e0e0e0; }}
@@ -2131,7 +2146,50 @@ class StyleManager:
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #505053, stop:1 #3a3a3d);
                 border: 2px solid #888888;
             }}
-            QCheckBox {{ color: #cccccc; font-size: 11px; spacing: 6px; }}
+            QPushButton:pressed {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3d3d40, stop:1 #2a2a2d);
+                border: 2px solid #a0a0a0;
+            }}
+            QCheckBox {{
+                spacing: 6px;
+                color: {body};
+                background-color: transparent;
+                font-size: 11px;
+            }}
+            QCheckBox::indicator {{
+                width: 12px;
+                height: 12px;
+                border: 2px solid #404040;
+                border-radius: 3px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #2a2a2d, stop:1 #202020);
+            }}
+            QCheckBox::indicator:hover {{
+                border: 2px solid #a8a8b0;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #3a3a3d, stop:1 #2d2d30);
+            }}
+            QCheckBox::indicator:pressed {{
+                border: 2px solid #d0d0d8;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #202020, stop:1 #1a1a1a);
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: transparent;
+                border: 2px solid #c8c8d0;
+            }}
+            QCheckBox::indicator:checked:hover {{
+                background-color: transparent;
+                border: 2px solid #d8d8e0;
+            }}
+            QCheckBox::indicator:checked:pressed {{
+                background-color: transparent;
+                border: 2px solid #e8e8ee;
+            }}
+            QCheckBox::indicator:disabled {{
+                background: #202020;
+                border: 2px solid #2d2d30;
+            }}
             QWidget#sandboxDiagToolbar {{
                 background-color: transparent;
             }}
@@ -2146,15 +2204,6 @@ class StyleManager:
                 border-radius: 4px;
                 color: {body};
                 padding: 3px 8px;
-                font-size: 11px;
-                min-height: 20px;
-            }}
-            QSpinBox {{
-                background-color: #252526;
-                border: 1px solid #404040;
-                border-radius: 4px;
-                color: {body};
-                padding: 2px 4px;
                 font-size: 11px;
                 min-height: 20px;
             }}
@@ -2220,9 +2269,52 @@ class StyleManager:
             }}
             QPushButton:hover {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #efeff4);
-                border: 2px solid {a.rgba(200)};
+                border: 2px solid #9898a4;
             }}
-            QCheckBox {{ color: #2a2a32; font-size: 11px; spacing: 6px; }}
+            QPushButton:pressed {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #dedee6, stop:1 #d4d4dc);
+                border: 2px solid #787888;
+            }}
+            QCheckBox {{
+                spacing: 6px;
+                color: #2a2a32;
+                background-color: transparent;
+                font-size: 11px;
+            }}
+            QCheckBox::indicator {{
+                width: 12px;
+                height: 12px;
+                border: 2px solid #a8a8b4;
+                border-radius: 3px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #ffffff, stop:1 #ececf0);
+            }}
+            QCheckBox::indicator:hover {{
+                border: 2px solid #9898a4;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #fafafc, stop:1 #f0f0f4);
+            }}
+            QCheckBox::indicator:pressed {{
+                border: 2px solid #787888;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #e4e4ea, stop:1 #d8d8e2);
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: transparent;
+                border: 2px solid #9898a4;
+            }}
+            QCheckBox::indicator:checked:hover {{
+                background-color: transparent;
+                border: 2px solid #787888;
+            }}
+            QCheckBox::indicator:checked:pressed {{
+                background-color: transparent;
+                border: 2px solid #686878;
+            }}
+            QCheckBox::indicator:disabled {{
+                background: #ececf0;
+                border: 2px solid #d8d8e0;
+            }}
             QWidget#sandboxDiagToolbar {{
                 background-color: transparent;
             }}
@@ -2237,15 +2329,6 @@ class StyleManager:
                 border-radius: 4px;
                 color: #1a1a1e;
                 padding: 3px 8px;
-                font-size: 11px;
-                min-height: 20px;
-            }}
-            QSpinBox {{
-                background-color: #ffffff;
-                border: 1px solid #c4c4cc;
-                border-radius: 4px;
-                color: #1a1a1e;
-                padding: 2px 4px;
                 font-size: 11px;
                 min-height: 20px;
             }}

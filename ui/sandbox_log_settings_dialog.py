@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
@@ -18,6 +17,7 @@ from PyQt6.QtWidgets import (
 
 from config.sandbox_log_prefs import DEFAULTS, log_setting_key, read_log_setting
 from config.app_config import settings_app_name
+from ui.custom_dialogs import CustomCheckBox
 
 
 class SandboxLogSettingsDialog(QDialog):
@@ -38,24 +38,24 @@ class SandboxLogSettingsDialog(QDialog):
         root.addWidget(intro)
 
         form = QFormLayout()
-        self._cb_sandbox = QCheckBox("Main window / sandbox notices")
-        self._cb_scan = QCheckBox("Game scan & wiki fetch milestones")
-        self._cb_cstart = QCheckBox("Compression: job started (folder, format)")
-        self._cb_ctick = QCheckBox("Compression: live progress (engine, MiB/s, file counts)")
+        self._cb_sandbox = CustomCheckBox("Main window / sandbox notices")
+        self._cb_scan = CustomCheckBox("Game scan & wiki fetch milestones")
+        self._cb_cstart = CustomCheckBox("Compression: job started (folder, format)")
+        self._cb_ctick = CustomCheckBox("Compression: live progress (engine, MiB/s, file counts)")
         self._cb_ctick.setToolTip("Turn off to hide noisy per-tick lines such as 7-Zip throughput updates.")
-        self._cb_cnotes = QCheckBox("Compression progress: show long explanatory notes (7-Zip caveats)")
+        self._cb_cnotes = CustomCheckBox("Compression progress: show long explanatory notes (7-Zip caveats)")
         self._cb_cnotes.setToolTip(
             "When off, progress lines omit the trailing note (e.g. LZMA2 / disk-growth explanations) so logs stay number-focused."
         )
-        self._cb_chw = QCheckBox("Append hardware snapshot on compression log lines")
+        self._cb_chw = CustomCheckBox("Append hardware snapshot on compression log lines")
         self._cb_chw.setToolTip(
             "Adds a short CPU/RAM/app RSS snippet to each compression-related Live log line (not a separate periodic spam)."
         )
-        self._cb_csummary = QCheckBox("Compression: SUMMARY line when the job finishes")
-        self._cb_cexit = QCheckBox("Compression: worker exit / cancel result")
-        self._cb_info = QCheckBox("Monitor tips (ready message, psutil tip, log cleared)")
-        self._cb_warn = QCheckBox("Warnings (e.g. disk mirror write failures)")
-        self._cb_marker = QCheckBox("Session markers ([GSBT_MARK])")
+        self._cb_csummary = CustomCheckBox("Compression: SUMMARY line when the job finishes")
+        self._cb_cexit = CustomCheckBox("Compression: worker exit / cancel result")
+        self._cb_info = CustomCheckBox("Monitor tips (ready message, psutil tip, log cleared)")
+        self._cb_warn = CustomCheckBox("Warnings (e.g. disk mirror write failures)")
+        self._cb_marker = CustomCheckBox("Session markers ([GSBT_MARK])")
 
         form.addRow(self._cb_sandbox)
         form.addRow(self._cb_scan)
@@ -83,7 +83,7 @@ class SandboxLogSettingsDialog(QDialog):
 
         self._load_from_settings()
 
-    def _widgets_map(self) -> list[tuple[str, QCheckBox]]:
+    def _widgets_map(self) -> list[tuple[str, CustomCheckBox]]:
         return [
             ("show_sandbox", self._cb_sandbox),
             ("show_scan", self._cb_scan),

@@ -16,8 +16,8 @@ from PyQt6.QtCore import QByteArray, Qt, QSettings, QTimer
 from PyQt6.QtGui import QFont, QKeySequence, QShortcut, QTextCursor
 from PyQt6.QtWidgets import (
     QApplication,
-    QCheckBox,
     QDialog,
+    QStyleFactory,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -35,6 +35,7 @@ from PyQt6.QtWidgets import (
 from config.app_config import settings_app_name
 from config.sandbox_log_prefs import read_log_setting
 from styles.manager import StyleManager
+from ui.custom_dialogs import CustomCheckBox
 from ui.sandbox_log_settings_dialog import SandboxLogSettingsDialog
 from ui.settings_framed_tabs import SettingsFramedTabs
 from utils.session_debug_log import append_session_line, log_file_path, reset_session_log
@@ -77,7 +78,7 @@ class SandboxMonitorWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("GSBT Sandbox Monitor")
-        self.setMinimumSize(480, 320)
+        self.setMinimumSize(1000, 320)
         self._settings = QSettings("MyCompany", settings_app_name())
         geom = self._settings.value("sandbox_monitor_geometry")
         if isinstance(geom, QByteArray) and not geom.isEmpty():
@@ -129,9 +130,9 @@ class SandboxMonitorWindow(QMainWindow):
             "Compression history uses plain-text match on extracted text. "
             "Shortcuts: Ctrl+F focus here, Esc clear focus."
         )
-        self._filter_case = QCheckBox("Match case")
+        self._filter_case = CustomCheckBox("Match case")
         self._filter_case.setToolTip("Case-sensitive substring or regex.")
-        self._filter_regex = QCheckBox("Regex")
+        self._filter_regex = CustomCheckBox("Regex")
         self._filter_regex.setToolTip("Python ``re`` syntax. Invalid patterns show all lines until fixed.")
         self._btn_clear_filter = QPushButton("Clear filter")
         self._btn_clear_filter.clicked.connect(self._clear_filter)
@@ -151,7 +152,7 @@ class SandboxMonitorWindow(QMainWindow):
 
         row2 = QHBoxLayout()
         row2.setSpacing(8)
-        self._follow_tail_cb = QCheckBox("Follow tail")
+        self._follow_tail_cb = CustomCheckBox("Follow tail")
         self._follow_tail_cb.setToolTip(
             "When checked, the active tab scrolls to the newest content on each append. "
             "Turn off to read earlier lines without being pulled to the bottom."
@@ -161,10 +162,11 @@ class SandboxMonitorWindow(QMainWindow):
         self._btn_scroll_latest.setToolTip("Scroll the active tab to the bottom once.")
         self._btn_scroll_latest.clicked.connect(self._scroll_active_to_latest)
         self._spin_last_n = QSpinBox()
+        self._spin_last_n.setObjectName("sandboxMonitorLastNSpinbox")
         self._spin_last_n.setRange(1, 2500)
         self._spin_last_n.setValue(50)
-        self._spin_last_n.setMaximumWidth(72)
         self._spin_last_n.setToolTip("How many trailing lines to copy from the full buffer (not the filtered view).")
+        self._apply_native_last_n_spinbox_style()
         self._btn_copy_last_n = QPushButton("Copy last N")
         self._btn_copy_last_n.setToolTip("Copy the last N lines from the current tab’s full buffer to the clipboard.")
         self._btn_copy_last_n.clicked.connect(self._copy_last_n_lines)
@@ -199,7 +201,8 @@ class SandboxMonitorWindow(QMainWindow):
         row2.addWidget(self._btn_defaults)
         self._btn_show_main = QPushButton("Show main window")
         self._btn_show_main.setToolTip(
-            "Bring the Game Save Backup Tool window back when you closed it but kept the monitor open."
+            "Bring the main app window to the front (same idea as Monitor on the main toolbar). "
+            "Shortcut: focus follows click."
         )
         self._btn_show_main.clicked.connect(self._on_show_main_window_clicked)
         row2.addWidget(self._btn_show_main)
@@ -312,7 +315,7 @@ class SandboxMonitorWindow(QMainWindow):
         self._btn_reset_disk.clicked.connect(self._on_reset_disk_log)
         btn_row.addWidget(self._btn_reset_disk)
         btn_row.addStretch(1)
-        self._mirror_disk_cb = QCheckBox("Mirror save-fetch tabs to disk log")
+        self._mirror_disk_cb = CustomCheckBox("Mirror save-fetch tabs to disk log")
         self._mirror_disk_cb.setChecked(True)
         btn_row.addWidget(self._mirror_disk_cb, 0, Qt.AlignmentFlag.AlignRight)
         bottom_lay.addLayout(btn_row)
@@ -380,12 +383,17 @@ class SandboxMonitorWindow(QMainWindow):
         if mw is not None:
             mw.apply_sandbox_defaults_refresh()
 
-    def refresh_show_main_button(self) -> None:
-        """Enable **Show main window** when the main window is hidden (sandbox)."""
-        if not hasattr(self, "_btn_show_main"):
+    def _apply_native_last_n_spinbox_style(self) -> None:
+        """Use the OS spinbox (e.g. Windows 11) — parent QSS does not define ``QSpinBox``, so it stays native."""
+        if not hasattr(self, "_spin_last_n"):
             return
-        mw = self._main_window
-        self._btn_show_main.setEnabled(mw is not None and not mw.isVisible())
+        self._spin_last_n.setStyleSheet("")
+        for key in ("windows11", "windowsvista", "windows", "Windows"):
+            st = QStyleFactory.create(key)
+            if st is not None:
+                self._spin_last_n.setStyle(st)
+                return
+        self._spin_last_n.setStyle(None)
 
     def _on_show_main_window_clicked(self) -> None:
         mw = self._main_window
@@ -396,7 +404,6 @@ class SandboxMonitorWindow(QMainWindow):
         mw.show()
         mw.raise_()
         mw.activateWindow()
-        self.refresh_show_main_button()
 
     # --- Buffers & rendering -------------------------------------------------
 
@@ -660,6 +667,7 @@ class SandboxMonitorWindow(QMainWindow):
         """Sync monitor chrome with ``StyleManager`` (call after ``MainWindow`` loads ``ui_theme``)."""
         sm = StyleManager.instance()
         self.setStyleSheet(sm.sandbox_monitor_window_qss())
+        self._apply_native_last_n_spinbox_style()
         self._apply_panel_chrome()
         self._update_mirror_disk_tooltip()
 
@@ -680,7 +688,6 @@ class SandboxMonitorWindow(QMainWindow):
                 "QLabel { background-color: #ececf0; color: #141418; padding: 8px; "
                 "border: 1px solid #c8c8d4; border-radius: 4px; font-size: 11px; }"
             )
-            self._mirror_disk_cb.setStyleSheet("color: #2a2a32; font-size: 11px;")
             pte = (
                 "QPlainTextEdit { background-color: #ffffff; color: #1a1a1e; "
                 "border: 1px solid #c8c8d4; border-radius: 4px; }"
@@ -698,7 +705,6 @@ class SandboxMonitorWindow(QMainWindow):
                 "QLabel { background-color: #2d2d30; color: #e0e0e0; padding: 8px; "
                 "border: 1px solid #3e3e42; border-radius: 4px; font-size: 11px; }"
             )
-            self._mirror_disk_cb.setStyleSheet("color: #cccccc; font-size: 11px;")
             self._log.setStyleSheet(
                 "QPlainTextEdit { background-color: #1e1e1e; color: #d4d4d4; "
                 "border: 1px solid #3e3e42; border-radius: 4px; }"
@@ -788,7 +794,6 @@ class SandboxMonitorWindow(QMainWindow):
         if self._disk_write_failures:
             base += f"  |  Disk mirror write errors: {self._disk_write_failures}"
         self._status.setText(base)
-        self.refresh_show_main_button()
 
     def _mirror_fetch_to_disk(self, line: str) -> None:
         if not self._mirror_disk_cb.isChecked():

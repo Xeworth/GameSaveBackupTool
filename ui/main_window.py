@@ -5,7 +5,19 @@ from PyQt6.QtWidgets import (
     QApplication, QDialog, QGraphicsDropShadowEffect, QStyledItemDelegate, QGraphicsOpacityEffect,
     QStyle, QStyleOptionButton, QToolButton, QWidgetAction,
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QSettings, QThreadPool, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty, QPoint, QRect, QSize
+from PyQt6.QtCore import (
+    Qt,
+    pyqtSignal,
+    QSettings,
+    QThreadPool,
+    QTimer,
+    QPropertyAnimation,
+    QEasingCurve,
+    pyqtProperty,
+    QPoint,
+    QRect,
+    QSize,
+)
 from PyQt6.QtGui import QIcon, QAction, QPalette, QColor, QPainter, QLinearGradient, QPen, QBrush, QPainterPath, QPainterPath, QKeySequence, QShortcut, QCursor, QGuiApplication
 import sys
 import os
@@ -681,30 +693,32 @@ class MainWindow(QMainWindow):
             sp_top, sp_bottom = "#2d2d30", "#1e1e1e"
             arrow_dis_border = "#2d2d30"
         elif sm.is_light_theme():
-            bg_top = "#f4f4f8"
-            bg_bottom = "#e6e6ee"
+            # Match ``QPushButton`` idle / hover / pressed in ``_main_window_qss_light``.
+            bg_top = "#fafafc"
+            bg_bottom = "#e8e8ee"
             border_color = "#c4c4ce"
             hover_border = sm.rgba(200)
             width_rule = ""
-            disabled_bg = "stop:0 #ececf0, stop:1 #e4e4ea"
+            disabled_bg = "stop:0 #ececf0, stop:1 #ececf0"
             ch_top, ch_bottom = "#ffffff", "#efeff4"
             cd_border = "#d4d4dc"
             scan_main_color = sm.ui_body_text_light()
             scan_dis_color = "#9898a4"
-            sp_top, sp_bottom = "#d8d8e2", "#ceced8"
+            sp_top, sp_bottom = "#dedee6", "#d0d0da"
             arrow_dis_border = "#d0d0d8"
         else:
-            bg_top = "#3a3a3d"
-            bg_bottom = "#2d2d30"
+            # Match ``QPushButton`` idle / hover / pressed in ``_main_window_qss_dark``.
+            bg_top = "#454548"
+            bg_bottom = "#2a2a2d"
             border_color = "#3e3e42"
             hover_border = sm.rgba(200)
             width_rule = ""
-            disabled_bg = "stop:0 #1e1e1e, stop:1 #1e1e1e"
+            disabled_bg = "stop:0 #202020, stop:1 #202020"
             ch_top, ch_bottom = "#505053", "#3a3a3d"
             cd_border = "#2d2d30"
             scan_main_color = sm.ui_body_text_dark()
             scan_dis_color = "#6a6a6a"
-            sp_top, sp_bottom = "#2d2d30", "#1e1e1e"
+            sp_top, sp_bottom = "#2d2d30", "#202020"
             arrow_dis_border = "#2d2d30"
 
         self.scan_button_container.setStyleSheet(
@@ -1209,9 +1223,9 @@ class MainWindow(QMainWindow):
                 self.backup_selected_button.setStyleSheet("""
                     QPushButton {
                         background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                            stop:0 #7be879, stop:1 #2e9d3e);
-                        border: 1px solid #1f8a32;
-                        color: #0a1a0c;
+                            stop:0 #c4f7c0, stop:1 #5cc068);
+                        border: 1px solid #4aad58;
+                        color: #0a1810;
                         min-height: 19px;
                         max-height: 19px;
                         height: 19px;
@@ -1221,13 +1235,13 @@ class MainWindow(QMainWindow):
                     }
                     QPushButton:hover {
                         background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                            stop:0 #8ef48a, stop:1 #3ab84a);
-                        border: 2px solid rgba(46, 125, 50, 220);
+                            stop:0 #d2fad0, stop:1 #6cc875);
+                        border: 2px solid rgba(56, 142, 60, 200);
                         border-radius: 4px;
                     }
                     QPushButton:pressed {
                         background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                            stop:0 #248a34, stop:1 #1a6e28);
+                            stop:0 #4aad55, stop:1 #2e8b40);
                     }
                     QPushButton:disabled {
                         background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -1409,9 +1423,9 @@ class MainWindow(QMainWindow):
             self.compress_button.setStyleSheet("""
                 QPushButton {
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                        stop:0 #7be879, stop:1 #2e9d3e);
-                    border: 1px solid #1f8a32;
-                    color: #0a1a0c;
+                        stop:0 #c4f7c0, stop:1 #5cc068);
+                    border: 1px solid #4aad58;
+                    color: #0a1810;
                     min-height: 19px;
                     max-height: 19px;
                     height: 19px;
@@ -1421,13 +1435,13 @@ class MainWindow(QMainWindow):
                 }
                 QPushButton:hover {
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                        stop:0 #8ef48a, stop:1 #3ab84a);
-                    border: 2px solid rgba(46, 125, 50, 220);
+                        stop:0 #d2fad0, stop:1 #6cc875);
+                    border: 2px solid rgba(56, 142, 60, 200);
                     border-radius: 4px;
                 }
                 QPushButton:pressed {
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                        stop:0 #248a34, stop:1 #1a6e28);
+                        stop:0 #4aad55, stop:1 #2e8b40);
                 }
                 QPushButton:disabled {
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -1707,8 +1721,6 @@ class MainWindow(QMainWindow):
             if hasattr(self, "tray_icon"):
                 self.tray_icon.hide()
             self.hide()
-            if self._sandbox_monitor is not None:
-                self._sandbox_monitor.refresh_show_main_button()
             return
         self._do_quit(None)
 
@@ -1905,8 +1917,6 @@ class MainWindow(QMainWindow):
             if hasattr(self, "tray_icon"):
                 self.tray_icon.hide()
             self.hide()
-            if self._sandbox_monitor is not None:
-                self._sandbox_monitor.refresh_show_main_button()
             return
         self._do_quit(event)
 

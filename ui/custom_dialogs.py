@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QProgressDialog,
     QApplication,
     QSizePolicy,
+    QFrame,
 )
 
 from PyQt6.QtCore import QSettings, QTimer, Qt, QRect, QSize, QPropertyAnimation, QEasingCurve, pyqtProperty
@@ -257,6 +258,29 @@ class FirstBackupDestinationDialog(QDialog):
         return self.remember_default
 
 
+# Shared rule: Backup (options vs folder/date) and Compress (engine vs 7-Zip options).
+_SETTINGS_SECTION_SEPARATOR_MARGIN_X_PX = 30
+_SETTINGS_SECTION_SEPARATOR_MARGIN_Y_PX = 20
+
+
+def _settings_section_separator_widget() -> QWidget:
+    wrap = QWidget()
+    wrap.setObjectName("settingsSectionSeparatorWrap")
+    mx = _SETTINGS_SECTION_SEPARATOR_MARGIN_X_PX
+    my = _SETTINGS_SECTION_SEPARATOR_MARGIN_Y_PX
+    lay = QHBoxLayout(wrap)
+    lay.setContentsMargins(mx, my, mx, my)
+    lay.setSpacing(0)
+    line = QFrame()
+    line.setObjectName("settingsSectionSeparator")
+    line.setFrameShape(QFrame.Shape.HLine)
+    line.setFrameShadow(QFrame.Shadow.Plain)
+    line.setFixedHeight(1)
+    line.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    lay.addWidget(line, 1)
+    return wrap
+
+
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -363,7 +387,7 @@ class SettingsDialog(QDialog):
         backup_form.addRow(self.skip_not_found_checkbox)
 
         backup_outer.addLayout(backup_form)
-        backup_outer.addStretch(1)
+        backup_outer.addWidget(_settings_section_separator_widget())
 
         backup_folder_label = QLabel("Default backup folder:")
         self.backup_folder_layout = QHBoxLayout()
@@ -385,7 +409,7 @@ class SettingsDialog(QDialog):
         self.date_format_combo.addItem("US (MM/DD/YYYY HH:MM AM/PM)", "us")
         self.date_format_combo.addItem("European (DD/MM/YYYY HH:MM)", "european")
         self.date_format_combo.addItem("Asian (YYYY/MM/DD HH:MM)", "asian")
-        self.date_format_combo.setMaximumWidth(235)
+        self.date_format_combo.setFixedWidth(227)
         saved_format = self.settings.value("date_format", "iso", type=str)
         index = self.date_format_combo.findData(saved_format)
         if index >= 0:
@@ -412,6 +436,7 @@ class SettingsDialog(QDialog):
         self.date_format_combo.currentIndexChanged.connect(self.update_date_preview)
 
         backup_outer.addLayout(backup_form_bottom)
+        backup_outer.addStretch(1)
         self._settings_tabs.addTab(backup_tab, "Backup settings")
 
         # --- Archive compression (Compress button) ---
@@ -419,9 +444,12 @@ class SettingsDialog(QDialog):
         compress_tab.setObjectName("settingsTabPage")
         compress_outer = QVBoxLayout(compress_tab)
         compress_outer.setContentsMargins(0, 0, 0, 0)
-        compress_form = QFormLayout()
-        compress_form.setSpacing(spacing_px)
-        compress_form.setContentsMargins(0, 0, 0, 0)
+        compress_form_top = QFormLayout()
+        compress_form_top.setSpacing(spacing_px)
+        compress_form_top.setContentsMargins(0, 0, 0, 0)
+        compress_form_bottom = QFormLayout()
+        compress_form_bottom.setSpacing(spacing_px)
+        compress_form_bottom.setContentsMargins(0, 0, 0, 0)
 
         self.compression_preset_combo = QComboBox()
         self.compression_preset_combo.setSizePolicy(
@@ -465,7 +493,10 @@ class SettingsDialog(QDialog):
         _engine_row_lay.setSpacing(spacing_px)
         _engine_row_lay.addWidget(self.compression_preset_combo, 1)
         _engine_row_lay.addWidget(self.get_7zip_button, 0)
-        compress_form.addRow(self._lbl_compression_engine, self._compress_engine_row)
+        compress_form_top.addRow(self._lbl_compression_engine, self._compress_engine_row)
+
+        compress_outer.addLayout(compress_form_top)
+        compress_outer.addWidget(_settings_section_separator_widget())
 
         self.compression_7z_hint = QLabel()
         self.compression_7z_hint.setObjectName("compression7zHint")
@@ -499,7 +530,7 @@ class SettingsDialog(QDialog):
         zix = self.compression_7z_format_combo.findData(zfmt)
         if zix >= 0:
             self.compression_7z_format_combo.setCurrentIndex(zix)
-        compress_form.addRow(self._compress_lbl_7z_format, self.compression_7z_format_combo)
+        compress_form_bottom.addRow(self._compress_lbl_7z_format, self.compression_7z_format_combo)
 
         self._compress_lbl_7z_mx = QLabel("7-Zip level (-mx):")
         self.compression_7z_mx_spin = QSpinBox()
@@ -508,7 +539,7 @@ class SettingsDialog(QDialog):
         self.compression_7z_mx_spin.setToolTip(
             "0 = copy/store … 9 = smallest/slowest. For .7z LZMA2, 5–7 is a good balance; 9 is very heavy."
         )
-        compress_form.addRow(self._compress_lbl_7z_mx, self.compression_7z_mx_spin)
+        compress_form_bottom.addRow(self._compress_lbl_7z_mx, self.compression_7z_mx_spin)
 
         self._compress_lbl_7z_threads = QLabel("7-Zip threads (-mmt):")
         self.compression_7z_threads_spin = QSpinBox()
@@ -516,7 +547,7 @@ class SettingsDialog(QDialog):
         self.compression_7z_threads_spin.setSpecialValueText("Auto")
         self.compression_7z_threads_spin.setValue(self.settings.value("compression_7z_threads", 0, type=int))
         self.compression_7z_threads_spin.setToolTip("0 = Auto (7-Zip uses all logical cores). Set e.g. 16 to cap load.")
-        compress_form.addRow(self._compress_lbl_7z_threads, self.compression_7z_threads_spin)
+        compress_form_bottom.addRow(self._compress_lbl_7z_threads, self.compression_7z_threads_spin)
 
         self.compression_7z_path_input = QLineEdit()
         self.compression_7z_path_input.setText(self.settings.value("compression_7z_path", "", type=str))
@@ -535,14 +566,14 @@ class SettingsDialog(QDialog):
         path_7z_w.setLayout(path_7z_row)
         self._lbl_7zip_exe = QLabel("7-Zip executable:")
         self._lbl_7zip_exe.setObjectName("settingsSevenZipExeLabel")
-        compress_form.addRow(self._lbl_7zip_exe, path_7z_w)
+        compress_form_bottom.addRow(self._lbl_7zip_exe, path_7z_w)
 
         self.compression_preset_combo.currentIndexChanged.connect(self._sync_compression_sub_ui)
         self.compression_7z_format_combo.currentIndexChanged.connect(self._sync_compression_sub_ui)
         self.compression_7z_path_input.textChanged.connect(self._sync_compression_sub_ui)
         self._sync_compression_sub_ui()
 
-        compress_outer.addLayout(compress_form)
+        compress_outer.addLayout(compress_form_bottom)
         compress_outer.addSpacing(6)
         compress_outer.addWidget(self.compression_7z_hint)
         compress_outer.addStretch(1)

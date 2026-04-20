@@ -57,9 +57,11 @@ class _FramedStackPanel(QWidget):
         return QColor("#3e3e42")
 
     def _panel_bg_color(self) -> QColor:
-        """Must match the framed panel background in QSS (settings or sandbox, same hex)."""
+        """Must match the framed panel background in QSS (per objectName; settings light uses #ffffff)."""
         sm = StyleManager.instance()
         if sm.is_light_theme():
+            if self.objectName() == "settingsFramedPanel":
+                return QColor("#ffffff")
             return QColor("#f4f4f7")
         return QColor("#252526")
 

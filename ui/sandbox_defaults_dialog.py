@@ -5,7 +5,6 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -18,21 +17,25 @@ from PyQt6.QtWidgets import (
 from config.sandbox_defaults import (
     ignore_cached_game_list,
     ignore_saved_backup_paths,
+    quit_exit_close_monitor_with_main,
+    quit_exit_remember,
     seven_zip_ui_override,
     set_ignore_cached_game_list,
     set_ignore_saved_backup_paths,
+    set_quit_exit_preference,
     set_seven_zip_ui_override,
 )
+from ui.custom_dialogs import CustomCheckBox
 
 
 class SandboxDefaultsDialog(QDialog):
-    """Same checkbox presentation as ``SandboxLogSettingsDialog`` (no Settings QSS sheet)."""
+    """Sandbox testing overrides (same checkbox widgets as Live log / monitor)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Sandbox defaults")
         self.setModal(True)
-        self.setMinimumWidth(460)
+        self.setMinimumWidth(480)
 
         root = QVBoxLayout(self)
         intro = QLabel(
@@ -45,14 +48,14 @@ class SandboxDefaultsDialog(QDialog):
         root.addWidget(intro)
 
         form = QFormLayout()
-        self._cb_backup = QCheckBox("Ignore saved backup folder paths")
+        self._cb_backup = CustomCheckBox("Ignore saved backup folder paths")
         self._cb_backup.setChecked(ignore_saved_backup_paths())
         self._cb_backup.setToolTip(
             "Treat default and last backup folder as unset in the main window and in Settings "
             "(paths stay in QSettings; this only hides them for sandbox testing)."
         )
 
-        self._cb_games = QCheckBox("Ignore cached game list on load / refresh")
+        self._cb_games = CustomCheckBox("Ignore cached game list on load / refresh")
         self._cb_games.setChecked(ignore_cached_game_list())
         self._cb_games.setToolTip(
             "Do not fill the table from config/game_save_data.json until you run Scan or turn this off."
@@ -76,6 +79,38 @@ class SandboxDefaultsDialog(QDialog):
         )
         form.addRow("7-Zip in Settings UI:", self._combo_7z)
 
+        quit_hdr = QLabel(
+            "<b>Closing the main window</b> (while the Sandbox Monitor is still open):"
+        )
+        quit_hdr.setWordWrap(True)
+        form.addRow(quit_hdr)
+
+        self._cb_quit_remember = CustomCheckBox(
+            "Remember my choice and skip the confirmation dialog next time"
+        )
+        self._cb_quit_remember.setChecked(quit_exit_remember())
+        self._cb_quit_remember.setToolTip(
+            "Same as “Remember my choice for next time” on the Close Game Save Backup Tool dialog. "
+            "Uncheck to always ask again."
+        )
+        form.addRow(self._cb_quit_remember)
+
+        self._lbl_quit_action = QLabel("When remembered, do:")
+        self._combo_quit_action = QComboBox()
+        self._combo_quit_action.addItem("Quit entire app (close monitor too)", True)
+        self._combo_quit_action.addItem("Hide main window only (keep monitor open)", False)
+        self._combo_quit_action.setToolTip(
+            "Enabled only when “Remember my choice…” is checked. Matches “Close both” vs “Main window only”."
+        )
+        if quit_exit_close_monitor_with_main():
+            self._combo_quit_action.setCurrentIndex(0)
+        else:
+            self._combo_quit_action.setCurrentIndex(1)
+        form.addRow(self._lbl_quit_action, self._combo_quit_action)
+
+        self._cb_quit_remember.toggled.connect(self._sync_quit_widgets)
+        self._sync_quit_widgets()
+
         root.addLayout(form)
 
         buttons = QDialogButtonBox(
@@ -92,7 +127,16 @@ class SandboxDefaultsDialog(QDialog):
         esc = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
         esc.activated.connect(self.reject)
 
+    def _sync_quit_widgets(self) -> None:
+        ok = self._cb_quit_remember.isChecked()
+        self._combo_quit_action.setEnabled(ok)
+        self._lbl_quit_action.setEnabled(ok)
+
     def apply_to_settings(self) -> None:
         set_ignore_saved_backup_paths(self._cb_backup.isChecked())
         set_ignore_cached_game_list(self._cb_games.isChecked())
         set_seven_zip_ui_override(self._combo_7z.currentData())
+        set_quit_exit_preference(
+            self._cb_quit_remember.isChecked(),
+            bool(self._combo_quit_action.currentData()),
+        )
