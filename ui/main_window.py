@@ -120,6 +120,10 @@ from ui.workers import (
 
 # --- Custom Progress Bar (accent gradient + glow) ---
 PROGRESS_BAR_FADE_DELAY_MS = 2000  # Fade out after completion (scan/compress); single shared behaviour
+# Smooth fill: painted width lerps toward each new ``setValue`` (scan/compress ticks feel less jumpy).
+PROGRESS_BAR_SMOOTH_INTERVAL_MS = 16
+PROGRESS_BAR_SMOOTH_BLEND = 0.22  # fraction of remaining gap per tick (~60 Hz → responsive but soft)
+
 
 class PurpleProgressBar(QProgressBar):
     """Progress bar for scan and compress; fill and glow follow the Windows accent color."""
@@ -128,6 +132,11 @@ class PurpleProgressBar(QProgressBar):
         super().__init__(parent)
         self._accent = QColor(accent_color) if accent_color is not None else QColor(148, 0, 211)
         self._track = QColor(26, 26, 26)
+        self._display_value = 0.0  # smoothed value used only in ``paintEvent``
+        self._target_value = 0
+        self._smooth_timer = QTimer(self)
+        self._smooth_timer.setInterval(PROGRESS_BAR_SMOOTH_INTERVAL_MS)
+        self._smooth_timer.timeout.connect(self._tick_smooth_progress)
         self.setFixedHeight(3)
         self.setTextVisible(False)
         self.setMaximumHeight(3)
@@ -166,6 +175,28 @@ class PurpleProgressBar(QProgressBar):
         self.fade_animation.setDuration(300)
         self.fade_animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
         self.fade_animation.finished.connect(self._on_fade_finished)
+
+    def setRange(self, minimum: int, maximum: int) -> None:
+        super().setRange(minimum, maximum)
+        v = int(self.value())
+        self._target_value = v
+        self._display_value = float(v)
+        self._smooth_timer.stop()
+        self.update()
+
+    def _tick_smooth_progress(self) -> None:
+        t = float(self._target_value)
+        d = self._display_value
+        diff = t - d
+        vmin, vmax = int(self.minimum()), int(self.maximum())
+        span = float(max(1, vmax - vmin))
+        snap = max(0.12, span * 0.0012)
+        if abs(diff) <= snap:
+            self._display_value = t
+            self._smooth_timer.stop()
+        else:
+            self._display_value = d + diff * PROGRESS_BAR_SMOOTH_BLEND
+        self.update()
 
     def set_accent_color(self, color: QColor) -> None:
         self._accent = QColor(color)
@@ -233,16 +264,29 @@ class PurpleProgressBar(QProgressBar):
             QTimer.singleShot(50, self.parent()._update_progress_bar_position)
     
     def setValue(self, value):
-        """Override to show/hide based on value"""
-        super().setValue(value)
-        # Show when we start making progress
-        if value > 0 and not self.isVisible():
+        """Drive smooth fill toward ``value``; show/hide and completion fade unchanged."""
+        vmin, vmax = int(self.minimum()), int(self.maximum())
+        raw = int(value)
+        if vmax >= vmin:
+            v = max(vmin, min(raw, vmax))
+        else:
+            v = raw
+        super().setValue(v)
+        self._target_value = v
+        # Snap backward / reset so the bar does not ease backward across a new task.
+        if v <= vmin or v + 1e-6 < self._display_value:
+            self._display_value = float(v)
+            self._smooth_timer.stop()
+            self.update()
+        elif not self._smooth_timer.isActive():
+            self._smooth_timer.start()
+
+        if v > vmin and not self.isVisible():
             self.animated_show()
-        # When we reach or exceed maximum, schedule fade-out (shared behaviour for scan and compress)
-        if self.maximum() > 0 and value >= self.maximum():
+        if vmax > vmin and v >= vmax:
             self._auto_hide_timer.stop()
             self._auto_hide_timer.start(PROGRESS_BAR_FADE_DELAY_MS)
-    
+
     def paintEvent(self, event):
         """Accent-colored horizontal gradient on the progress chunk (same geometry as before)."""
         if self.maximumHeight() == 0:
@@ -255,8 +299,13 @@ class PurpleProgressBar(QProgressBar):
         bg_rect = self.rect()
         painter.fillRect(bg_rect, self._track)
 
-        if self.maximum() > 0 and self.value() > 0:
-            progress_width = int((self.value() / self.maximum()) * bg_rect.width())
+        vmax = int(self.maximum())
+        vmin = int(self.minimum())
+        span = float(vmax - vmin)
+        if span > 0.0 and self._display_value > float(vmin) + 1e-6:
+            frac = (self._display_value - float(vmin)) / span
+            frac = max(0.0, min(1.0, frac))
+            progress_width = int(frac * float(bg_rect.width()))
             if progress_width > 0:
                 progress_rect = bg_rect.adjusted(0, 0, progress_width - bg_rect.width(), 0)
                 gradient = QLinearGradient(progress_rect.left(), 0, progress_rect.right(), 0)
@@ -2601,10 +2650,8 @@ class MainWindow(QMainWindow):
         self.update_scan_button_style(is_cancel=False)
         self.add_manual_button.setEnabled(True)
         self._update_backup_compress_buttons()
-        # Reset to 0–100 before 100% so we are not stuck at value == game count from per-game updates
-        self.progress_bar.setMinimum(0)
-        self.progress_bar.setMaximum(100)
-        self.progress_bar.setValue(100)  # Full bar; compress path will setValue(0) when starting
+        # Do not change range/value here: the last ``on_save_location_fetched`` already set value == max
+        # (N/N), which triggers the progress fade. Re-setting to 0–100 caused a visible dip then refill.
         self.status_label.setText(f"Scan complete. Found data for {self.game_table_widget.rowCount()} games.")
         if self._should_show_notification():
             self._show_tray_notification("Scan complete", f"Found data for {self.game_table_widget.rowCount()} games.", QSystemTrayIcon.MessageIcon.Information, 2000)
