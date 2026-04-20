@@ -12,11 +12,21 @@ from collections import deque
 from datetime import datetime
 from typing import Any, Deque, Dict, List, Optional
 
-from PyQt6.QtCore import QByteArray, Qt, QSettings, QTimer
-from PyQt6.QtGui import QFont, QKeySequence, QShortcut, QTextCursor
+from PyQt6.QtCore import QByteArray, QPointF, QRect, QSize, Qt, QSettings, QTimer
+from PyQt6.QtGui import (
+    QColor,
+    QFont,
+    QKeySequence,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QShortcut,
+    QTextCursor,
+)
 from PyQt6.QtWidgets import (
     QApplication,
     QDialog,
+    QFrame,
     QStyleFactory,
     QHBoxLayout,
     QInputDialog,
@@ -26,6 +36,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QSizePolicy,
     QSpinBox,
     QTextEdit,
     QVBoxLayout,
@@ -59,6 +70,181 @@ _COMPRESS_HW_SUFFIX_CATEGORIES = frozenset(
     {"compress_start", "compress_tick", "compress_summary", "compress_exit"}
 )
 
+# Live metrics strip: sparkline width (fits free space beside psutil text at ≥1000px window width).
+SANDBOX_METRICS_GRAPH_MIN_W = 240
+SANDBOX_METRICS_GRAPH_MAX_W = 475
+SANDBOX_METRICS_GRAPH_H = 38
+SANDBOX_METRICS_SAMPLES = 120  # at 1 Hz ≈ 2 minutes of history
+
+
+class SandboxCpuRamSparkline(QWidget):
+    """Compact shared CPU/RAM plot for the sandbox monitor status row."""
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._samples: Deque[tuple[Optional[float], Optional[float]]] = deque(maxlen=SANDBOX_METRICS_SAMPLES)
+        self._bright_panel = False
+        self.setMinimumSize(SANDBOX_METRICS_GRAPH_MIN_W, SANDBOX_METRICS_GRAPH_H)
+        self.setMaximumHeight(SANDBOX_METRICS_GRAPH_H)
+        self.setMaximumWidth(SANDBOX_METRICS_GRAPH_MAX_W)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setToolTip(
+            "Live history (1 sample/s): CPU % and RAM % overlaid in one plot.\n"
+            "Install psutil for data (pip install psutil)."
+        )
+
+    def set_panel_bright(self, bright: bool) -> None:
+        self._bright_panel = bool(bright)
+        self.update()
+
+    def sizeHint(self) -> QSize:
+        return QSize(min(SANDBOX_METRICS_GRAPH_MAX_W, max(SANDBOX_METRICS_GRAPH_MIN_W, 440)), SANDBOX_METRICS_GRAPH_H)
+
+    def feed(self, cpu_percent: Optional[float], ram_percent: Optional[float]) -> None:
+        self._samples.append((cpu_percent, ram_percent))
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        r = self.rect().adjusted(1, 1, -1, -1)
+        if self._bright_panel:
+            bg = QColor(255, 255, 255)
+            border = QColor(196, 196, 208)
+            grid = QColor(206, 206, 220)
+            cpu_line = QColor(30, 110, 200)
+            ram_line = QColor(90, 140, 60)
+            cpu_fill_a = QColor(30, 110, 200, 22)
+            ram_fill_a = QColor(90, 140, 60, 22)
+            hint = QColor(120, 120, 135)
+        else:
+            bg = QColor(37, 37, 38)
+            border = QColor(62, 62, 66)
+            grid = QColor(96, 96, 106)
+            cpu_line = QColor(120, 185, 255)
+            ram_line = QColor(160, 220, 140)
+            cpu_fill_a = QColor(120, 185, 255, 24)
+            ram_fill_a = QColor(160, 220, 140, 24)
+            hint = QColor(140, 140, 155)
+
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(bg)
+        p.drawRoundedRect(r, 4, 4)
+        p.setPen(QPen(border, 1))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRoundedRect(r, 4, 4)
+
+        if not self._samples:
+            p.setPen(hint)
+            p.setFont(QFont(self.font().family(), 9))
+            p.drawText(r, int(Qt.AlignmentFlag.AlignCenter), "—")
+            p.end()
+            return
+
+        pad_x = 4
+        legend_w = 26
+        tick_w = 22
+        gap_after_ticks = 4
+        left_cols_w = legend_w + tick_w + gap_after_ticks
+        plot = r.adjusted(pad_x + left_cols_w, 4, -pad_x, -4)
+        if plot.width() < 8 or plot.height() < 8:
+            p.end()
+            return
+
+        # Faint rectangular grid inside the plot (horizontal: 0/50/100 + vertical slices).
+        p.setPen(QPen(grid, 1, Qt.PenStyle.DotLine))
+        y0 = plot.bottom()
+        y50 = plot.top() + plot.height() * 0.5
+        y100 = plot.top()
+        for yy in (y0, y50, y100):
+            y = int(round(yy))
+            p.drawLine(plot.left(), y, plot.right(), y)
+        for k in range(1, 5):
+            x = int(round(plot.left() + (plot.width() * k / 5.0)))
+            p.drawLine(x, plot.top(), x, plot.bottom())
+
+        p.setPen(hint)
+        p.setFont(QFont(self.font().family(), 6))
+        tick_x = r.left() + pad_x + legend_w + 1
+        tick_align = int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        p.drawText(QRect(tick_x, int(y100) - 6, 22, 10), tick_align, "100")
+        p.drawText(QRect(tick_x, int(y50) - 6, 22, 10), tick_align, "50")
+        p.drawText(QRect(tick_x, int(y0) - 7, 22, 10), tick_align, "0")
+
+        def line_and_fill(vals: List[Optional[float]]) -> tuple[QPainterPath, QPainterPath]:
+            h = float(plot.height())
+            if h < 2.0:
+                return QPainterPath(), QPainterPath()
+            n = len(vals)
+            last_v = 0.0
+            xs: list[float] = []
+            ys: list[float] = []
+            for i in range(n):
+                v = vals[i]
+                if v is None:
+                    vv = last_v
+                else:
+                    vv = max(0.0, min(100.0, float(v)))
+                    last_v = vv
+                t = i / max(1, n - 1)
+                x = plot.left() + t * plot.width()
+                y = plot.bottom() - (vv / 100.0) * h
+                xs.append(x)
+                ys.append(y)
+            if not xs:
+                return QPainterPath(), QPainterPath()
+            line_path = QPainterPath()
+            line_path.moveTo(QPointF(xs[0], ys[0]))
+            for j in range(1, len(xs)):
+                line_path.lineTo(QPointF(xs[j], ys[j]))
+            fill_path = QPainterPath(line_path)
+            fill_path.lineTo(QPointF(xs[-1], plot.bottom()))
+            fill_path.lineTo(QPointF(xs[0], plot.bottom()))
+            fill_path.closeSubpath()
+            return fill_path, line_path
+
+        cpus = [a for a, _ in self._samples]
+        rams = [b for _, b in self._samples]
+
+        fill_cpu, line_cpu = line_and_fill(cpus)
+        if not fill_cpu.isEmpty():
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(cpu_fill_a)
+            p.drawPath(fill_cpu)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setPen(QPen(cpu_line, 1.0))
+            p.drawPath(line_cpu)
+
+        fill_ram, line_ram = line_and_fill(rams)
+        if not fill_ram.isEmpty():
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(ram_fill_a)
+            p.drawPath(fill_ram)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setPen(QPen(ram_line, 1.0))
+            p.drawPath(line_ram)
+
+        # Compact legend centered in the left column (between edge and % labels).
+        p.setFont(QFont(self.font().family(), 6))
+        p.setPen(hint)
+        legend_left = r.left() + pad_x
+        legend_right = tick_x - 2
+        legend_width = max(16, legend_right - legend_left)
+        legend_mid_y = plot.center().y()
+        cpu_text_y = legend_mid_y - 12
+        ram_text_y = legend_mid_y + 2
+        p.drawText(QRect(legend_left, cpu_text_y, legend_width, 9), int(Qt.AlignmentFlag.AlignHCenter), "CPU")
+        sw_w = 16
+        sw_l = legend_left + max(0, (legend_width - sw_w) // 2)
+        sw_offset = 2
+        p.setPen(QPen(cpu_line, 1.2))
+        p.drawLine(sw_l, cpu_text_y + 9 + sw_offset, sw_l + sw_w, cpu_text_y + 9 + sw_offset)
+        p.setPen(hint)
+        p.drawText(QRect(legend_left, ram_text_y, legend_width, 9), int(Qt.AlignmentFlag.AlignHCenter), "RAM")
+        p.setPen(QPen(ram_line, 1.2))
+        p.drawLine(sw_l, ram_text_y + 9 + sw_offset, sw_l + sw_w, ram_text_y + 9 + sw_offset)
+        p.end()
+
 
 class SandboxMonitorWindow(QMainWindow):
     """Second window: metrics, buffered logs (filter / tail / markers), compression history."""
@@ -67,6 +253,8 @@ class SandboxMonitorWindow(QMainWindow):
     MAX_GAMES_LINES = 8000
     MAX_BATCH_LINES = 4000
     MAX_TRACE_LINES = 12000
+    TOOLBAR_SIDE_PAD = 8
+    TOOLBAR_ROW_SPACING = 8
 
     _TRACE_INTRO_LINES = (
         "Legend (per-game END line): SAVE_ON_DISK | WIKI_PATHS_NO_DISK (wiki had strings, not on disk) | "
@@ -78,7 +266,7 @@ class SandboxMonitorWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("GSBT Sandbox Monitor")
-        self.setMinimumSize(1000, 320)
+        self.setMinimumSize(1020, 320)
         self._settings = QSettings("MyCompany", settings_app_name())
         geom = self._settings.value("sandbox_monitor_geometry")
         if isinstance(geom, QByteArray) and not geom.isEmpty():
@@ -99,6 +287,7 @@ class SandboxMonitorWindow(QMainWindow):
         self._last_tab_idx: int = 0
         self._compression_intro_active = True
         self._main_window: Any = None
+        self._toolbar_dividers: List[QFrame] = []
 
         self.menuBar().setVisible(False)
 
@@ -106,22 +295,34 @@ class SandboxMonitorWindow(QMainWindow):
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
         layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(6)
+        layout.setSpacing(self.TOOLBAR_ROW_SPACING)
 
+        self._status_row = QWidget()
+        status_lay = QHBoxLayout(self._status_row)
+        status_lay.setContentsMargins(self.TOOLBAR_SIDE_PAD, 0, self.TOOLBAR_SIDE_PAD, 0)
+        status_lay.setSpacing(self.TOOLBAR_ROW_SPACING)
         self._status = QLabel()
         self._status.setWordWrap(True)
+        self._status.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self._status.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(self._status)
+        self._status.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        va = Qt.AlignmentFlag.AlignVCenter
+        status_lay.addWidget(self._status, 1, va)
+        self._metrics_spark = SandboxCpuRamSparkline(self)
+        status_lay.addWidget(self._metrics_spark, 0, va)
+        layout.addWidget(self._status_row)
 
         # --- Diagnostics toolbar (filter, tail, copy helpers, disk errors) ---
         diag = QWidget()
         diag.setObjectName("sandboxDiagToolbar")
         diag_outer = QVBoxLayout(diag)
-        diag_outer.setContentsMargins(0, 0, 0, 0)
-        diag_outer.setSpacing(4)
+        diag_outer.setContentsMargins(
+            self.TOOLBAR_SIDE_PAD, 0, self.TOOLBAR_SIDE_PAD, 0
+        )
+        diag_outer.setSpacing(self.TOOLBAR_ROW_SPACING)
 
         row1 = QHBoxLayout()
-        row1.setSpacing(8)
+        row1.setSpacing(self.TOOLBAR_ROW_SPACING)
         self._filter_edit = QLineEdit()
         self._filter_edit.setPlaceholderText("Filter lines in current tab…")
         self._filter_edit.setClearButtonEnabled(True)
@@ -151,7 +352,7 @@ class SandboxMonitorWindow(QMainWindow):
         diag_outer.addLayout(row1)
 
         row2 = QHBoxLayout()
-        row2.setSpacing(8)
+        row2.setSpacing(self.TOOLBAR_ROW_SPACING)
         self._follow_tail_cb = CustomCheckBox("Follow tail")
         self._follow_tail_cb.setToolTip(
             "When checked, the active tab scrolls to the newest content on each append. "
@@ -193,10 +394,22 @@ class SandboxMonitorWindow(QMainWindow):
         row2.addWidget(QLabel("N:"))
         row2.addWidget(self._spin_last_n)
         row2.addWidget(self._btn_copy_last_n)
-        row2.addSpacing(12)
+        sep_a = QFrame()
+        sep_a.setObjectName("sandboxToolbarDivider")
+        sep_a.setFrameShape(QFrame.Shape.VLine)
+        sep_a.setFrameShadow(QFrame.Shadow.Plain)
+        sep_a.setFixedHeight(18)
+        self._toolbar_dividers.append(sep_a)
+        row2.addWidget(sep_a)
         row2.addWidget(self._btn_drop_marker)
         row2.addWidget(self._btn_copy_since_marker)
-        row2.addSpacing(12)
+        sep_b = QFrame()
+        sep_b.setObjectName("sandboxToolbarDivider")
+        sep_b.setFrameShape(QFrame.Shape.VLine)
+        sep_b.setFrameShadow(QFrame.Shadow.Plain)
+        sep_b.setFixedHeight(18)
+        self._toolbar_dividers.append(sep_b)
+        row2.addWidget(sep_b)
         row2.addWidget(self._btn_log_settings)
         row2.addWidget(self._btn_defaults)
         self._btn_show_main = QPushButton("Show main window")
@@ -298,11 +511,13 @@ class SandboxMonitorWindow(QMainWindow):
         # Bottom bar (per-tab clear/copy + live disk controls)
         bottom = QWidget()
         bottom_lay = QVBoxLayout(bottom)
-        bottom_lay.setContentsMargins(8, 4, 8, 0)
-        bottom_lay.setSpacing(3)
+        bottom_lay.setContentsMargins(
+            self.TOOLBAR_SIDE_PAD, 0, self.TOOLBAR_SIDE_PAD, 0
+        )
+        bottom_lay.setSpacing(self.TOOLBAR_ROW_SPACING)
 
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(6)
+        btn_row.setSpacing(self.TOOLBAR_ROW_SPACING)
         self._btn_clear = QPushButton()
         self._btn_clear.clicked.connect(self._on_bottom_clear_clicked)
         self._btn_copy = QPushButton()
@@ -321,7 +536,7 @@ class SandboxMonitorWindow(QMainWindow):
         bottom_lay.addLayout(btn_row)
 
         labels_row = QHBoxLayout()
-        labels_row.setSpacing(0)
+        labels_row.setSpacing(self.TOOLBAR_ROW_SPACING)
         self._bottom_hint = QLabel()
         self._bottom_hint.setWordWrap(True)
         self._bottom_hint.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -682,10 +897,14 @@ class SandboxMonitorWindow(QMainWindow):
         self._disk_errors_label.setStyleSheet(
             f"color: {err_color if self._disk_write_failures else ok_color}; font-size: 10px;"
         )
+        sep_color = "#d0d0d8" if sm.sandbox_panel_is_bright() else "#3e3e42"
+        for sep in self._toolbar_dividers:
+            sep.setStyleSheet(f"QFrame#sandboxToolbarDivider {{ color: {sep_color}; background: {sep_color}; }}")
 
+        self._metrics_spark.set_panel_bright(sm.sandbox_panel_is_bright())
         if sm.sandbox_panel_is_bright():
             self._status.setStyleSheet(
-                "QLabel { background-color: #ececf0; color: #141418; padding: 8px; "
+                "QLabel { background-color: #ececf0; color: #141418; padding: 10px 8px 10px 8px; "
                 "border: 1px solid #c8c8d4; border-radius: 4px; font-size: 11px; }"
             )
             pte = (
@@ -702,7 +921,7 @@ class SandboxMonitorWindow(QMainWindow):
             )
         else:
             self._status.setStyleSheet(
-                "QLabel { background-color: #2d2d30; color: #e0e0e0; padding: 8px; "
+                "QLabel { background-color: #2d2d30; color: #e0e0e0; padding: 10px 8px 10px 8px; "
                 "border: 1px solid #3e3e42; border-radius: 4px; font-size: 11px; }"
             )
             self._log.setStyleSheet(
@@ -794,6 +1013,7 @@ class SandboxMonitorWindow(QMainWindow):
         if self._disk_write_failures:
             base += f"  |  Disk mirror write errors: {self._disk_write_failures}"
         self._status.setText(base)
+        self._metrics_spark.feed(s.get("cpu_percent"), s.get("ram_percent"))
 
     def _mirror_fetch_to_disk(self, line: str) -> None:
         if not self._mirror_disk_cb.isChecked():
