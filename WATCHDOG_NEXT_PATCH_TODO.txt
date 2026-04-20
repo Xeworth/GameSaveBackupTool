@@ -1,0 +1,62 @@
+GSBT Watchdog - Next Patch TODO
+================================
+
+Context
+-------
+This note captures watchdog/auto-backup findings from code review so we can
+revisit after beta testing.
+
+Current behavior (high level)
+-----------------------------
+- Watches save folders with watchdog and triggers auto-backup on file modify.
+- Applies per-game cooldown (backup_frequency_minutes).
+- Runs retention cleanup in AutoBackupWorker.
+
+Findings / Risks
+----------------
+1) Event coverage is incomplete (medium)
+   - SaveFileEventHandler only implements on_modified.
+   - Some games update via create/rename patterns, which may be missed or delayed.
+
+2) Potential worker overlap (medium)
+   - trigger_auto_backup starts AutoBackupWorker immediately and overwrites
+     self.auto_backup_worker each time.
+   - Multiple near-simultaneous triggers can run overlapping backups.
+
+3) Cooldown timestamp written before success (low)
+   - last_backup_times[game_name] is set before worker completion.
+   - Failed backups can still block retries until cooldown expires.
+
+4) Registry-only watcher intent mismatch (low)
+   - check_watcher_status can treat registry-only games as "monitor needed".
+   - start_file_monitoring only schedules filesystem paths; registry-only cannot
+     actually be watched by watchdog.
+
+Suggested next patch (priority order)
+-------------------------------------
+A) Expand event hooks
+   - Add on_created and on_moved handlers (and optionally on_deleted) to call
+     the same backup trigger path.
+
+B) Add per-game in-flight guard
+   - Prevent overlapping backups for the same game.
+   - Optional: queue one trailing backup request if changes occur during a run.
+
+C) Move cooldown timestamp to success path
+   - Update last_backup_times only when backup_completed(success=True).
+
+D) Align watcher "should monitor" logic
+   - Exclude registry-only entries from filesystem watcher eligibility checks.
+
+E) Optional diagnostics
+   - Add lightweight debug counters in sandbox log:
+     events seen / backups triggered / skipped by cooldown / skipped by in-flight.
+
+Beta test checklist (quick)
+---------------------------
+- Save changes in a game that writes by direct modify: confirm auto-backup.
+- Save changes in a game that writes by temp-file rename: confirm trigger.
+- Trigger many saves quickly: confirm no backup overlap issues.
+- Force a backup failure (invalid destination): confirm retry behavior.
+- Mix filesystem-save and registry-only games: confirm watcher state is sensible.
+

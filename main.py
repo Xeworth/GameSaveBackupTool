@@ -71,12 +71,6 @@ def main():
         sandbox_monitor.setWindowIcon(app_icon)
 
     window = MainWindow(sandbox_monitor=sandbox_monitor)
-    if sandbox_monitor is not None:
-        sandbox_monitor.set_main_window(window)
-        sandbox_monitor.apply_app_style()
-        sandbox_monitor.show()
-        sandbox_monitor.raise_()
-        sandbox_monitor.activateWindow()
     window.setWindowIcon(app_icon)
     if args.hidden:
         window.hide()
@@ -84,6 +78,13 @@ def main():
         window.showMinimized()
     else:
         window.show()
+        window.raise_()
+        window.activateWindow()
+    if sandbox_monitor is not None:
+        sandbox_monitor.set_main_window(window)
+        sandbox_monitor.apply_app_style()
+        # Show monitor after the main window so taskbar ordering is main (left) then monitor (right).
+        sandbox_monitor.show()
     sys.exit(app.exec())
 
 if __name__ == "__main__":

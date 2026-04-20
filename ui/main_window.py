@@ -955,15 +955,39 @@ class MainWindow(QMainWindow):
         self._setup_system_theme_listener()
 
     def _setup_system_theme_listener(self) -> None:
-        """When ``ui_theme`` is ``system``, follow Windows light/dark without restarting."""
+        """Follow Windows UI changes live: system light/dark and accent color."""
         hints = QGuiApplication.styleHints()
         if hasattr(hints, "colorSchemeChanged"):
             hints.colorSchemeChanged.connect(self._on_system_color_scheme_changed)
+        # Windows does not expose a direct Qt signal for accent changes, so poll lightly.
+        self._ui_env_poll_timer = QTimer(self)
+        self._ui_env_poll_timer.setInterval(1500)
+        self._ui_env_poll_timer.timeout.connect(self._poll_windows_ui_environment)
+        self._ui_env_poll_timer.start()
+        self._last_polled_accent_rgb = tuple(self._styles.rgb)
+        self._last_polled_is_light = bool(self._styles.is_light_theme())
 
     def _on_system_color_scheme_changed(self) -> None:
-        if not self._styles.is_system_theme():
+        self._poll_windows_ui_environment(force=True)
+
+    def _poll_windows_ui_environment(self, force: bool = False) -> None:
+        """Apply theme/accent updates only when Windows UI state changes."""
+        old_rgb = tuple(self._last_polled_accent_rgb)
+        old_light = bool(self._last_polled_is_light)
+
+        self._styles.refresh()  # refresh accent from Windows registry
+        new_rgb = tuple(self._styles.rgb)
+        new_light = bool(self._styles.is_light_theme())
+
+        # Dark/light changes matter only for ``system`` theme mode.
+        theme_changed = self._styles.is_system_theme() and (new_light != old_light)
+        accent_changed = new_rgb != old_rgb
+        if not (force or theme_changed or accent_changed):
             return
-        self._styles.refresh()
+
+        self._last_polled_accent_rgb = new_rgb
+        self._last_polled_is_light = new_light
+
         self.apply_minimal_styling()
         self.table_container.set_accent_color(self._styles.accent_qcolor())
         self.scan_menu.setStyleSheet(self._styles.menu_qss())
