@@ -1,22 +1,74 @@
-# Bytecode / caches
+# Python (current and future editions)
 __pycache__/
 **/__pycache__/
 *.py[cod]
-*.pyc
-*.pyo
-*$py.class
-
-# Virtual environments
 .venv/
 venv/
 env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
 
-# Local session log (regenerated at runtime)
-utils/gsbt_last_session.log
-
-# OS / editor noise
+# OS / editor
 .DS_Store
 Thumbs.db
 .idea/
+.vs/
 *.swp
-*.swo
+*.iml
+.cursor/
+
+# .NET / Visual Studio
+**/bin/
+**/obj/
+**/publish/
+TestResults/
+artifacts/
+*.DotSettings.user
+*.rsuser
+project.lock.json
+project.fragment.lock.json
+*.nupkg
+*.snupkg
+*.cache
+
+# Local logs
+src-winui/logs/*.txt
+logs/*.txt
+*.log
+
+# Release artifacts (installer exe, portable zip — upload via GitHub Releases, not git)
+src-winui/installer/output/
+installer/output/
+*.iss.bak
+*.zip
+*.7z
+*.exe
+*.msi
+!src-winui/installer/**/*.iss
+
+# Local user / app data (never commit)
+**/game_save_data.json
+**/winui_settings.json
+**/ludusavi-save-manifest.meta.json
+**/settings.json
+!**/Properties/launchSettings.json
+
+# Personal dev notes (local only)
+todo.txt
+rename-repo-folder.bat
+
+# Crash dumps
+*.dmp
+*.mdmp
+
+# Backup / temp files
+*~
+*.bak
+*.tmp
+*.orig

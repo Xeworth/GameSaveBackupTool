@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<UserControl
+    x:Class="GSBT.WinUI.Views.SandboxBenchmarkView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <ScrollViewer
+        Padding="0,0,16,4"
+        VerticalScrollBarVisibility="Auto"
+        Background="{ThemeResource GsbtWindowBgBrush}">
+        <StackPanel Spacing="12" MaxWidth="720" HorizontalAlignment="Center">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel
+                    Grid.Column="0"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+                    <Button
+                        x:Name="RunBenchmarkButton"
+                        MinHeight="32"
+                        MinWidth="240"
+                        Padding="12,8"
+                        Content="Run benchmark (current Settings)"
+                        Click="RunBenchmarkButton_Click"
+                        AccessKey="R"
+                        ToolTipService.ToolTip="Run one compression benchmark with current Settings. Alt+R; Tab / arrow keys; Space or Enter activates." />
+                    <Button
+                        x:Name="CancelBenchmarkButton"
+                        MinHeight="32"
+                        Padding="12,8"
+                        IsEnabled="False"
+                        Content="Cancel"
+                        Click="CancelBenchmarkButton_Click"
+                        Foreground="White"
+                        AccessKey="X"
+                        ToolTipService.ToolTip="Stop the in-progress benchmark run. Alt+X when enabled; Escape also cancels when this page has focus.">
+                        <Button.Background>
+                            <SolidColorBrush Color="#C42B1C" />
+                        </Button.Background>
+                    </Button>
+                </StackPanel>
+                <Button
+                    x:Name="ClearAllHistoryButton"
+                    Grid.Column="1"
+                    MinHeight="32"
+                    Padding="12,8"
+                    VerticalAlignment="Center"
+                    Content="Clear all history"
+                    Click="ClearAllHistory_Click"
+                    AutomationProperties.Name="Clear all compression benchmark history"
+                    AccessKey="H"
+                    ToolTipService.ToolTip="Remove every saved run from the local JSON file after confirmation. Export first if you need a backup. Alt+H; Tab moves between controls; Space activates." />
+            </Grid>
+            <TextBlock
+                x:Name="RunStatusText"
+                FontSize="12"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                TextWrapping="WrapWholeWords" />
+            <StackPanel x:Name="RunsPanel" Spacing="10" />
+            <StackPanel
+                Orientation="Horizontal"
+                Spacing="8"
+                Margin="0,4,0,0"
+                HorizontalAlignment="Left">
+                <Button
+                    MinHeight="32"
+                    Padding="12,8"
+                    Content="Export all JSON…"
+                    Click="ExportJson_Click"
+                    AccessKey="E"
+                    AutomationProperties.Name="Export all benchmark runs as JSON"
+                    ToolTipService.ToolTip="Save every saved run to a JSON file. Alt+E; Tab / arrow keys; Space or Enter activates." />
+                <Button
+                    MinHeight="32"
+                    Padding="12,8"
+                    Content="Import JSON…"
+                    Click="ImportJson_Click"
+                    AccessKey="I"
+                    AutomationProperties.Name="Import benchmark runs from JSON"
+                    ToolTipService.ToolTip="Merge runs from a JSON file into local history. Alt+I; Tab / arrow keys; Space or Enter activates." />
+                <Button
+                    MinHeight="32"
+                    Padding="12,8"
+                    Content="Copy all (plain text)"
+                    Click="CopyAll_Click"
+                    AccessKey="P"
+                    AutomationProperties.Name="Copy all benchmark runs as plain text"
+                    ToolTipService.ToolTip="Copy every run to the clipboard as plain text. Alt+P; Tab / arrow keys; Space or Enter activates." />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<UserControl
+    x:Class="GSBT.WinUI.Views.SandboxPerformanceView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:GSBT.WinUI.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Background="{ThemeResource GsbtWindowBgBrush}">
+        <StackPanel Padding="0,0,8,4" Spacing="12" MaxWidth="900" HorizontalAlignment="Center">
+            <TextBlock Text="Performance" Style="{StaticResource SubtitleTextBlockStyle}" />
+            <TextBlock
+                FontSize="11"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                TextWrapping="WrapWholeWords"
+                Text="Live CPU and RAM while compression runs (built-in ZIP uses in-process CPU on the gold line; 7-Zip uses a separate process). Pink markers show when each named batch test finished. Expand icons open a large chart window with scroll and hover." />
+            <TextBlock
+                x:Name="SamplingStatusText"
+                FontSize="11"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                TextWrapping="WrapWholeWords"
+                Visibility="Collapsed" />
+
+            <StackPanel x:Name="BatchOverviewSection" Spacing="8" Visibility="Collapsed">
+                <TextBlock Text="Batch run" FontWeight="SemiBold" FontSize="13" />
+                <TextBlock
+                    x:Name="BatchOverviewCaption"
+                    FontSize="11"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    TextWrapping="WrapWholeWords" />
+                <Grid
+                    x:Name="BatchTestCardsHost"
+                    SizeChanged="BatchTestCardsHost_SizeChanged" />
+            </StackPanel>
+
+            <Border
+                x:Name="CombinedChartSection"
+                Padding="12"
+                Background="{ThemeResource GsbtCardBgBrush}"
+                BorderBrush="{ThemeResource GsbtBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Visibility="Visible">
+                <StackPanel Spacing="8">
+                    <Grid x:Name="CombinedHeaderGrid">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Combined" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                        <Button
+                            x:Name="OverlayChartButton"
+                            Grid.Column="1"
+                            Width="22"
+                            Height="22"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            ToolTipService.ToolTip="Open full combined diagnostics (scroll, hover, selection)"
+                            Click="OverlayChartButton_Click">
+                            <FontIcon Glyph="&#xE740;" FontSize="11" />
+                        </Button>
+                    </Grid>
+                    <TextBlock
+                        x:Name="CombinedCaption"
+                        FontSize="11"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        TextWrapping="WrapWholeWords" />
+                    <controls:PerformanceSparkline
+                        x:Name="CombinedChart"
+                        Height="140"
+                        HorizontalAlignment="Stretch"
+                        ShowPercentGrid="True"
+                        MaxValue="100"
+                        Series1Label="GSBT CPU %"
+                        Series2Label="Compression CPU %"
+                        Series3Label="GSBT RAM"
+                        Series4Label="Compression RAM" />
+                    <StackPanel x:Name="CombinedLegendRow" Orientation="Horizontal" Spacing="16">
+                        <StackPanel x:Name="CombinedLegendGsbtCpu" Orientation="Horizontal" Spacing="6">
+                            <Rectangle Width="12" Height="3" Fill="#FF2D8CFF" RadiusX="1" RadiusY="1" />
+                            <TextBlock Text="GSBT CPU" FontSize="11" />
+                        </StackPanel>
+                        <StackPanel x:Name="CombinedLegendCompressCpu" Orientation="Horizontal" Spacing="6">
+                            <Rectangle Width="12" Height="3" Fill="#FFE6B422" RadiusX="1" RadiusY="1" />
+                            <TextBlock Text="Compression CPU" FontSize="11" />
+                        </StackPanel>
+                        <StackPanel x:Name="CombinedLegendGsbtMem" Orientation="Horizontal" Spacing="6">
+                            <Rectangle Width="12" Height="3" Fill="#FF3EC8A0" RadiusX="1" RadiusY="1" Opacity="0.85" />
+                            <TextBlock Text="GSBT RAM" FontSize="11" />
+                        </StackPanel>
+                        <StackPanel x:Name="CombinedLegendCompressMem" Orientation="Horizontal" Spacing="6">
+                            <Rectangle Width="12" Height="3" Fill="#FFD25FFF" RadiusX="1" RadiusY="1" Opacity="0.85" />
+                            <TextBlock Text="Compression RAM" FontSize="11" />
+                        </StackPanel>
+                        <StackPanel x:Name="CombinedLegendCheckpoint" Orientation="Horizontal" Spacing="6">
+                            <Rectangle Width="8" Height="8" Fill="#FFFF78B4" RadiusX="1" RadiusY="1" />
+                            <TextBlock Text="Test start" FontSize="11" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border
+                Padding="12"
+                Background="{ThemeResource GsbtCardBgBrush}"
+                BorderBrush="{ThemeResource GsbtBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <StackPanel Spacing="8">
+                    <Grid x:Name="CpuHeaderGrid">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="CPU" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                        <Button
+                            x:Name="CpuExpandButton"
+                            Grid.Column="1"
+                            Width="22"
+                            Height="22"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            ToolTipService.ToolTip="Open CPU chart detail"
+                            Click="CpuExpandButton_Click">
+                            <FontIcon Glyph="&#xE740;" FontSize="11" />
+                        </Button>
+                    </Grid>
+                    <TextBlock x:Name="CpuCaption" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <controls:PerformanceSparkline
+                        x:Name="CpuChart"
+                        Height="140"
+                        HorizontalAlignment="Stretch"
+                        ShowPercentGrid="True"
+                        MaxValue="100"
+                        Series1Label="GSBT CPU %"
+                        Series2Label="Compression CPU %" />
+                    <StackPanel x:Name="CpuLegendRow" Orientation="Horizontal" Spacing="16">
+                        <StackPanel x:Name="CpuLegendGsbt" Orientation="Horizontal" Spacing="6">
+                            <Rectangle Width="12" Height="3" Fill="#FF2D8CFF" RadiusX="1" RadiusY="1" />
+                            <TextBlock Text="GSBT CPU" FontSize="11" />
+                        </StackPanel>
+                        <StackPanel x:Name="CpuLegendCompression" Orientation="Horizontal" Spacing="6">
+                            <Rectangle Width="12" Height="3" Fill="#FFE6B422" RadiusX="1" RadiusY="1" />
+                            <TextBlock Text="Compression CPU" FontSize="11" />
+                        </StackPanel>
+                        <StackPanel x:Name="CpuLegendCheckpoint" Orientation="Horizontal" Spacing="6">
+                            <Rectangle Width="8" Height="8" Fill="#FFFF78B4" RadiusX="1" RadiusY="1" />
+                            <TextBlock Text="Test finished" FontSize="11" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border
+                Padding="12"
+                Background="{ThemeResource GsbtCardBgBrush}"
+                BorderBrush="{ThemeResource GsbtBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <StackPanel Spacing="8">
+                    <Grid x:Name="MemHeaderGrid">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="RAM" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                        <Button
+                            x:Name="MemExpandButton"
+                            Grid.Column="1"
+                            Width="22"
+                            Height="22"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            ToolTipService.ToolTip="Open RAM chart detail"
+                            Click="MemExpandButton_Click">
+                            <FontIcon Glyph="&#xE740;" FontSize="11" />
+                        </Button>
+                    </Grid>
+                    <TextBlock x:Name="MemCaption" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <controls:PerformanceSparkline
+                        x:Name="MemChart"
+                        Height="140"
+                        HorizontalAlignment="Stretch"
+                        AutoScale="True"
+                        ShowPercentGrid="False"
+                        MaxValue="512"
+                        Series1Label="GSBT RAM"
+                        Series2Label="Compression RAM" />
+                    <StackPanel x:Name="MemLegendRow" Orientation="Horizontal" Spacing="16">
+                        <StackPanel x:Name="MemLegendGsbt" Orientation="Horizontal" Spacing="6">
+                            <Rectangle Width="12" Height="3" Fill="#FF3EC8A0" RadiusX="1" RadiusY="1" />
+                            <TextBlock Text="GSBT RAM" FontSize="11" />
+                        </StackPanel>
+                        <StackPanel x:Name="MemLegendCompression" Orientation="Horizontal" Spacing="6">
+                            <Rectangle Width="12" Height="3" Fill="#FFD25FFF" RadiusX="1" RadiusY="1" />
+                            <TextBlock Text="Compression RAM" FontSize="11" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

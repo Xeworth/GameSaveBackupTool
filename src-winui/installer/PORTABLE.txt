@@ -1,0 +1,24 @@
+Game Save Backup Tool — portable build
+========================================
+
+Extract this folder anywhere (USB drive, D:\Tools, etc.) and run:
+
+  gsbt.exe
+
+No installer required. .NET 8 and the Windows App SDK are already bundled.
+
+Sandbox (optional developer mode)
+---------------------------------
+  gsbt.exe -s
+  gsbt-sandbox.exe   (if the hard link was created in this zip)
+
+Settings and data
+-----------------
+Same as the installed edition:
+  %AppData%\GSBT\
+
+Uninstall
+---------
+Delete this folder. Your settings in %AppData%\GSBT remain until you remove them.
+
+Project: https://github.com/Xeworth/GameSaveBackupTool

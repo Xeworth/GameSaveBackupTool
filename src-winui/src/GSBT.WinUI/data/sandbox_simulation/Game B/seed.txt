@@ -1,0 +1,1 @@
+Optional bundled dummy save files for sandbox simulation (Game B). Scan size tiers are still driven by the simulated child logic.

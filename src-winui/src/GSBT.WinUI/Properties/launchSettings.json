@@ -1,0 +1,14 @@
+{
+  "profiles": {
+    "GSBT.WinUI (0 Unpackaged)": {
+      "commandName": "Project"
+    },
+    "GSBT.WinUI (Sandbox)": {
+      "commandName": "Project",
+      "commandLineArgs": "-s"
+    },
+    "GSBT.WinUI (Package)": {
+      "commandName": "MsixPackage"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+global using System.Collections;
+global using System.Collections.Generic;
+global using System.Diagnostics;
+global using System.Linq;
+global using System.Net.Http;
+global using System.Text.Json;
+global using GSBT.Core.Catalog;
+global using GSBT.Core.Common;
+global using GSBT.Core.Models;
+global using GSBT.Core.Services;
+global using GSBT.WinUI;
+global using GSBT.WinUI.Common;
+global using GSBT.WinUI.Controls;
+global using GSBT.WinUI.Services;
+global using Microsoft.UI.Dispatching;
+global using Microsoft.UI.Xaml;

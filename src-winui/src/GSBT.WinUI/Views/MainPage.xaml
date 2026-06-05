@@ -1,0 +1,673 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Page
+    x:Class="GSBT.WinUI.Views.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:controls="using:GSBT.WinUI.Controls"
+    mc:Ignorable="d"
+    Background="{ThemeResource GsbtWindowBgBrush}"
+    KeyboardAcceleratorPlacementMode="Hidden">
+    <Page.Resources>
+        <Style x:Key="GsbtCommandBarButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="10,4,10,4" />
+        </Style>
+        <Style x:Key="GsbtAccentCommandBarButtonStyle" TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="10,4,10,4" />
+        </Style>
+        <Style x:Key="GsbtToolbarDangerCommandBarButtonStyle" TargetType="Button" BasedOn="{StaticResource GsbtCommandBarButtonStyle}">
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="#C42B1C" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <!-- Adjacent halves share one outline (WinUI SplitButton-style corners + no double inner border). -->
+        <Style
+            x:Key="GsbtToolbarSplitPrimaryStyle"
+            TargetType="Button"
+            BasedOn="{StaticResource GsbtCommandBarButtonStyle}">
+            <Setter Property="CornerRadius" Value="4,0,0,4" />
+            <Setter Property="BorderThickness" Value="1,1,0,1" />
+        </Style>
+        <Style
+            x:Key="GsbtToolbarSplitChevronStyle"
+            TargetType="Button"
+            BasedOn="{StaticResource GsbtCommandBarButtonStyle}">
+            <Setter Property="CornerRadius" Value="0,4,4,0" />
+            <Setter Property="BorderThickness" Value="0,1,1,1" />
+        </Style>
+        <MenuFlyout x:Name="ScanMenuFlyout">
+            <MenuFlyoutItem Click="RefreshManifestAndRescan_Click" Text="Download latest manifest and rescan" />
+        </MenuFlyout>
+    </Page.Resources>
+    <Page.KeyboardAccelerators>
+        <KeyboardAccelerator Key="A" Modifiers="Control" Invoked="SelectAll_Invoked" />
+        <KeyboardAccelerator Key="Delete" Invoked="DeleteRows_Invoked" />
+        <KeyboardAccelerator Key="Z" Modifiers="Control" Invoked="UndoDelete_Invoked" />
+        <KeyboardAccelerator Key="F1" Invoked="ShowShortcuts_Invoked" />
+        <KeyboardAccelerator Key="F11" Invoked="AboutShortcut_Invoked" />
+        <KeyboardAccelerator Key="F12" Invoked="DiagnosticsShortcut_Invoked" />
+        <KeyboardAccelerator Key="F2" Invoked="OpenSettingsShortcut_Invoked" />
+        <KeyboardAccelerator Key="B" Modifiers="Control" Invoked="BackupShortcut_Invoked" />
+        <KeyboardAccelerator Key="Escape" Invoked="SettingsEscape_Invoked" />
+    </Page.KeyboardAccelerators>
+
+    <Grid
+        x:Name="ShellRoot"
+        Background="Transparent"
+        Opacity="1"
+        RenderTransformOrigin="0.5,0.5">
+        <Grid.RenderTransform>
+            <CompositeTransform
+                x:Name="ThemeShellMotion"
+                ScaleX="1"
+                ScaleY="1"
+                TranslateY="0" />
+        </Grid.RenderTransform>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid x:Name="ContentSwapRoot" Grid.Row="0" MinHeight="0">
+            <Grid x:Name="MainContentArea" Padding="16,16,16,0">
+                <controls:GameTableView
+                    x:Name="GamesTable"
+                    ItemsSource="{x:Bind ViewModel.DisplayedGames, Mode=OneWay}" />
+            </Grid>
+            <!-- Stacked: integrity above toast. Row0 * keeps strip bottom-aligned so when the toast row collapses the strip eases down smoothly. -->
+            <Grid
+                x:Name="BottomMessageStack"
+                VerticalAlignment="Bottom"
+                HorizontalAlignment="Center"
+                Margin="16,0,16,22">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" MinHeight="0" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" MinHeight="0">
+                    <Border
+                        x:Name="BackupIntegrityStripBorder"
+                        VerticalAlignment="Bottom"
+                        HorizontalAlignment="Center"
+                        MaxWidth="420"
+                        Padding="12,8,12,8"
+                        Background="{ThemeResource GsbtHeaderStripBrush}"
+                        BorderBrush="{ThemeResource GsbtBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Opacity="0"
+                        Visibility="Collapsed">
+                        <Border.RenderTransform>
+                            <TranslateTransform x:Name="BackupIntegrityStripTransform" Y="8" />
+                        </Border.RenderTransform>
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock
+                                x:Name="BackupIntegrityStripGlyph"
+                                FontSize="16"
+                                VerticalAlignment="Top"
+                                Margin="0,2,0,0"
+                                Foreground="#FF8A6A"
+                                Text="&#x26A0;"
+                                IsTextSelectionEnabled="False" />
+                            <StackPanel Spacing="6" MaxWidth="360">
+                                <TextBlock
+                                    x:Name="BackupIntegrityStripText"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource GsbtBodyTextBrush}"
+                                    TextWrapping="WrapWholeWords"
+                                    TextAlignment="Left" />
+                                <Button
+                                    x:Name="BackupIntegrityStripDismissButton"
+                                    HorizontalAlignment="Center"
+                                    Style="{StaticResource GsbtCommandBarButtonStyle}"
+                                    AutomationProperties.Name="Dismiss backup integrity notice"
+                                    Content="Dismiss"
+                                    Click="BackupIntegrityStripDismiss_Click" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+                <!-- Ephemeral status rows (max 3) stack above the integrity chrome row, which stays at the bottom. -->
+                <StackPanel
+                    x:Name="StatusToastStackPanel"
+                    Grid.Row="1"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Bottom"
+                    Spacing="6">
+                    <Border
+                        x:Name="EphemeralToast0Border"
+                        HorizontalAlignment="Center"
+                        MaxWidth="440"
+                        Padding="12,8,12,8"
+                        Background="{ThemeResource GsbtHeaderStripBrush}"
+                        BorderBrush="{ThemeResource GsbtBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Opacity="0"
+                        Visibility="Collapsed">
+                        <Border.RenderTransform>
+                            <TranslateTransform x:Name="EphemeralToast0Transform" Y="0" />
+                        </Border.RenderTransform>
+                        <StackPanel Spacing="4" MaxWidth="400">
+                            <TextBlock
+                                x:Name="EphemeralToast0Line1"
+                                FontSize="12"
+                                Foreground="{ThemeResource GsbtBodyTextBrush}"
+                                TextWrapping="WrapWholeWords"
+                                TextAlignment="Left"
+                                IsTextSelectionEnabled="False" />
+                            <TextBlock
+                                x:Name="EphemeralToast0Line2"
+                                FontSize="12"
+                                Foreground="{ThemeResource GsbtSecondaryLabelBrush}"
+                                TextWrapping="WrapWholeWords"
+                                TextAlignment="Left"
+                                Visibility="Collapsed"
+                                IsTextSelectionEnabled="False" />
+                        </StackPanel>
+                    </Border>
+                    <Border
+                        x:Name="EphemeralToast1Border"
+                        HorizontalAlignment="Center"
+                        MaxWidth="440"
+                        Padding="12,8,12,8"
+                        Background="{ThemeResource GsbtHeaderStripBrush}"
+                        BorderBrush="{ThemeResource GsbtBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Opacity="0"
+                        Visibility="Collapsed">
+                        <Border.RenderTransform>
+                            <TranslateTransform x:Name="EphemeralToast1Transform" Y="0" />
+                        </Border.RenderTransform>
+                        <StackPanel Spacing="4" MaxWidth="400">
+                            <TextBlock
+                                x:Name="EphemeralToast1Line1"
+                                FontSize="12"
+                                Foreground="{ThemeResource GsbtBodyTextBrush}"
+                                TextWrapping="WrapWholeWords"
+                                TextAlignment="Left"
+                                IsTextSelectionEnabled="False" />
+                            <TextBlock
+                                x:Name="EphemeralToast1Line2"
+                                FontSize="12"
+                                Foreground="{ThemeResource GsbtSecondaryLabelBrush}"
+                                TextWrapping="WrapWholeWords"
+                                TextAlignment="Left"
+                                Visibility="Collapsed"
+                                IsTextSelectionEnabled="False" />
+                        </StackPanel>
+                    </Border>
+                    <Border
+                        x:Name="EphemeralToast2Border"
+                        HorizontalAlignment="Center"
+                        MaxWidth="440"
+                        Padding="12,8,12,8"
+                        Background="{ThemeResource GsbtHeaderStripBrush}"
+                        BorderBrush="{ThemeResource GsbtBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Opacity="0"
+                        Visibility="Collapsed">
+                        <Border.RenderTransform>
+                            <TranslateTransform x:Name="EphemeralToast2Transform" Y="0" />
+                        </Border.RenderTransform>
+                        <StackPanel Spacing="4" MaxWidth="400">
+                            <TextBlock
+                                x:Name="EphemeralToast2Line1"
+                                FontSize="12"
+                                Foreground="{ThemeResource GsbtBodyTextBrush}"
+                                TextWrapping="WrapWholeWords"
+                                TextAlignment="Left"
+                                IsTextSelectionEnabled="False" />
+                            <TextBlock
+                                x:Name="EphemeralToast2Line2"
+                                FontSize="12"
+                                Foreground="{ThemeResource GsbtSecondaryLabelBrush}"
+                                TextWrapping="WrapWholeWords"
+                                TextAlignment="Left"
+                                Visibility="Collapsed"
+                                IsTextSelectionEnabled="False" />
+                        </StackPanel>
+                    </Border>
+                    <Border
+                        x:Name="StatusToastBorder"
+                        HorizontalAlignment="Center"
+                        MaxWidth="440"
+                        Padding="12,8,12,8"
+                        Background="{ThemeResource GsbtHeaderStripBrush}"
+                        BorderBrush="{ThemeResource GsbtBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Opacity="0"
+                        Visibility="Collapsed">
+                        <Border.RenderTransform>
+                            <TranslateTransform x:Name="StatusToastTransform" Y="8" />
+                        </Border.RenderTransform>
+                        <StackPanel Spacing="10">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <TextBlock
+                                    x:Name="StatusToastSeverityGlyph"
+                                    FontSize="16"
+                                    VerticalAlignment="Top"
+                                    Margin="0,2,0,0"
+                                    Visibility="Collapsed"
+                                    IsTextSelectionEnabled="False" />
+                                <StackPanel Spacing="4" MaxWidth="380">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock
+                                            x:Name="StatusToastLine1"
+                                            Grid.Column="0"
+                                            FontSize="12"
+                                            Foreground="{ThemeResource GsbtBodyTextBrush}"
+                                            TextWrapping="WrapWholeWords"
+                                            TextAlignment="Left"
+                                            VerticalAlignment="Top"
+                                            Margin="0,0,2,0"
+                                            IsTextSelectionEnabled="False" />
+                                        <Button
+                                            x:Name="StatusToastDetailsToggle"
+                                            Grid.Column="1"
+                                            VerticalAlignment="Top"
+                                            Margin="0,0,0,0"
+                                            MinWidth="20"
+                                            MinHeight="20"
+                                            Width="20"
+                                            Height="20"
+                                            Padding="0"
+                                            FontSize="8"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Foreground="{ThemeResource GsbtSecondaryLabelBrush}"
+                                            Content="&#x25BC;"
+                                            Visibility="Collapsed"
+                                            AutomationProperties.Name="Show or hide extra detail for this message"
+                                            ToolTipService.ToolTip="Show or hide details"
+                                            Click="StatusToastDetailsToggle_Click" />
+                                    </Grid>
+                                    <TextBlock
+                                        x:Name="StatusToastLine2"
+                                        FontSize="12"
+                                        Margin="0,2,0,0"
+                                        Foreground="{ThemeResource GsbtSecondaryLabelBrush}"
+                                        TextWrapping="WrapWholeWords"
+                                        TextAlignment="Left"
+                                        Visibility="Collapsed"
+                                        IsTextSelectionEnabled="True" />
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel
+                                x:Name="StatusToastActionsRow"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Center"
+                                Spacing="10"
+                                Visibility="Collapsed">
+                                <Button
+                                    x:Name="StatusToastDismissButton"
+                                    Content="Dismiss"
+                                    AccessKey="D"
+                                    Style="{StaticResource GsbtCommandBarButtonStyle}"
+                                    AutomationProperties.Name="Dismiss status message"
+                                    Click="StatusToastDismiss_Click" />
+                                <Button
+                                    x:Name="StatusToastClearHighlightsButton"
+                                    Content="Dismiss warnings"
+                                    AccessKey="W"
+                                    Style="{StaticResource GsbtCommandBarButtonStyle}"
+                                    AutomationProperties.Name="Clear Last backup column highlights"
+                                    Click="StatusToastClearHighlights_Click" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+            <Border
+                x:Name="SettingsPanelContainer"
+                Padding="12,12,12,12"
+                Background="{ThemeResource GsbtWindowBgBrush}"
+                Opacity="0"
+                Visibility="Collapsed" />
+        </Grid>
+
+        <Grid
+            x:Name="ProgressStripGrid"
+            Grid.Row="1"
+            Height="16"
+            Padding="16,0,16,0">
+            <ProgressBar
+                x:Name="ProgressTrack"
+                Height="3"
+                VerticalAlignment="Center"
+                IsIndeterminate="{x:Bind ViewModel.IsScanning, Mode=OneWay}"
+                Maximum="100"
+                Opacity="0"
+                Value="{x:Bind ViewModel.ScanProgress, Mode=OneWay}" />
+        </Grid>
+
+        <Grid x:Name="FooterSwapRoot" Grid.Row="2">
+            <Border
+                x:Name="NormalFooterBorder"
+                Background="{ThemeResource GsbtToolbarStripBrush}"
+                BorderBrush="{ThemeResource GsbtToolbarSeparatorBrush}"
+                BorderThickness="0,1,0,0">
+                <Grid
+                    x:Name="FooterCommandRow"
+                    Padding="10,10,10,10"
+                    ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel
+                        x:Name="LeftCommandBarStack"
+                        Grid.Column="0"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center"
+                        Orientation="Horizontal"
+                        Spacing="8">
+                        <Grid>
+                            <Button
+                                x:Name="BackupButton"
+                                Click="BackupSelected_Click"
+                                Content="Backup"
+                                IsEnabled="{x:Bind ViewModel.BackupFooterEnabled, Mode=OneWay}"
+                                Style="{StaticResource GsbtAccentCommandBarButtonStyle}" />
+                            <TeachingTip
+                                x:Name="BackupBulkTeachingTip"
+                                Title="Bulk backup"
+                                PreferredPlacement="Top"
+                                PlacementMargin="0,12,0,0"
+                                IsLightDismissEnabled="True"
+                                Closed="BackupBulkTeachingTip_Closed">
+                                <TeachingTip.Content>
+                                    <TextBlock
+                                        MaxWidth="340"
+                                        TextWrapping="WrapWholeWords"
+                                        Text="With nothing selected, Backup copies every game in the list that has a save folder on disk. Select specific rows first if you only want those titles." />
+                                </TeachingTip.Content>
+                            </TeachingTip>
+                        </Grid>
+                        <Grid>
+                            <Button
+                                x:Name="CompressButton"
+                                Click="Compress_Click"
+                                Content="Compress"
+                                IsEnabled="{x:Bind ViewModel.CompressFooterEnabled, Mode=OneWay}"
+                                Style="{StaticResource GsbtCommandBarButtonStyle}" />
+                            <TeachingTip
+                                x:Name="CompressWorkflowTeachingTip"
+                                Title="Compress your backups"
+                                PreferredPlacement="Top"
+                                PlacementMargin="0,12,0,0"
+                                IsLightDismissEnabled="True"
+                                Closed="CompressWorkflowTeachingTip_Closed">
+                                <TeachingTip.Content>
+                                    <TextBlock
+                                        MaxWidth="340"
+                                        TextWrapping="WrapWholeWords"
+                                        Text="After a backup finishes, use Compress to zip your backups. With nothing selected, every game with backup data is included; select rows first to compress only those games." />
+                                </TeachingTip.Content>
+                            </TeachingTip>
+                        </Grid>
+                        <StackPanel
+                            x:Name="ScanAndCustomToolbarHost"
+                            Orientation="Horizontal"
+                            Spacing="8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Button
+                                    x:Name="ScanPrimaryButton"
+                                    Grid.Column="0"
+                                    Click="ScanPrimary_Click"
+                                    IsEnabled="{x:Bind ViewModel.CanUseFooterCommands, Mode=OneWay}"
+                                    Style="{StaticResource GsbtToolbarSplitPrimaryStyle}"
+                                    FontSize="12"
+                                    MinHeight="28"
+                                    Height="28"
+                                    Padding="10,4,8,4" />
+                                <Border
+                                    Grid.Column="1"
+                                    Width="1"
+                                    VerticalAlignment="Stretch"
+                                    Background="{ThemeResource GsbtToolbarSeparatorBrush}" />
+                                <Button
+                                    x:Name="ScanFlyoutButton"
+                                    Grid.Column="2"
+                                    Click="ScanFlyoutAnchor_Click"
+                                    IsEnabled="{x:Bind ViewModel.CanUseFooterCommands, Mode=OneWay}"
+                                    Style="{StaticResource GsbtToolbarSplitChevronStyle}"
+                                    FontSize="12"
+                                    MinHeight="28"
+                                    Height="28"
+                                    MinWidth="26"
+                                    Padding="4,4,8,4">
+                                    <FontIcon
+                                        FontFamily="{ThemeResource SymbolThemeFontFamily}"
+                                        FontSize="11"
+                                        Glyph="&#xE70E;" />
+                                </Button>
+                            </Grid>
+                            <Button
+                                x:Name="AddCustomGameButton"
+                                Click="AddCustomGame_Click"
+                                Content="Add custom game"
+                                IsEnabled="{x:Bind ViewModel.CanUseFooterCommands, Mode=OneWay}"
+                                Style="{StaticResource GsbtCommandBarButtonStyle}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel
+                        x:Name="RightCommandBarStack"
+                        Grid.Column="1"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Orientation="Horizontal"
+                        Spacing="8">
+                        <Button
+                            x:Name="FilterCommandButton"
+                            Click="Filter_Click"
+                            IsEnabled="{x:Bind ViewModel.CanUseFooterCommands, Mode=OneWay}"
+                            Style="{StaticResource GsbtCommandBarButtonStyle}" />
+                        <Button
+                            x:Name="MonitorCommandButton"
+                            Click="MonitorCommandButton_Click"
+                            IsEnabled="{x:Bind ViewModel.CanUseFooterCommands, Mode=OneWay}"
+                            Style="{StaticResource GsbtCommandBarButtonStyle}"
+                            Visibility="Collapsed" />
+                        <!-- DropDownButton template chevron is hard to retheme; explicit label row + ChevronUp + Flyout matches Scan behavior. -->
+                        <Button
+                            x:Name="ToolsMenuButton"
+                            IsEnabled="{x:Bind ViewModel.CanUseFooterCommands, Mode=OneWay}"
+                            Style="{StaticResource GsbtCommandBarButtonStyle}"
+                            FontSize="12"
+                            MinHeight="28"
+                            Height="28"
+                            Padding="10,4,10,4">
+                            <Button.Flyout>
+                                <MenuFlyout x:Name="ToolsMenuFlyout">
+                                    <MenuFlyoutItem Click="Diagnostics_Click" Text="Diagnostics">
+                                        <MenuFlyoutItem.KeyboardAccelerators>
+                                            <KeyboardAccelerator Key="F12" />
+                                        </MenuFlyoutItem.KeyboardAccelerators>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutItem Click="About_Click" Text="About">
+                                        <MenuFlyoutItem.KeyboardAccelerators>
+                                            <KeyboardAccelerator Key="F11" />
+                                        </MenuFlyoutItem.KeyboardAccelerators>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutItem Click="ShortcutsMenu_Click" Text="Shortcuts">
+                                        <MenuFlyoutItem.KeyboardAccelerators>
+                                            <KeyboardAccelerator Key="F1" />
+                                        </MenuFlyoutItem.KeyboardAccelerators>
+                                    </MenuFlyoutItem>
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
+                        <Button
+                            x:Name="SettingsPageButton"
+                            Click="Settings_Click"
+                            Content="Settings"
+                            IsEnabled="{x:Bind ViewModel.CanUseFooterCommands, Mode=OneWay}"
+                            Style="{StaticResource GsbtCommandBarButtonStyle}" />
+                        <Button
+                            x:Name="QuitButton"
+                            Click="Quit_Click"
+                            Content="Close"
+                            Style="{StaticResource GsbtCommandBarButtonStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border
+                x:Name="SettingsFooterBorder"
+                Background="{ThemeResource GsbtToolbarStripBrush}"
+                BorderBrush="{ThemeResource GsbtToolbarSeparatorBrush}"
+                BorderThickness="0,1,0,0"
+                Opacity="0"
+                Visibility="Collapsed">
+                <Grid Padding="10,10,10,10" ColumnSpacing="10">
+                    <Grid.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="Tab" Modifiers="Control" Invoked="SettingsTabNext_Invoked" />
+                        <KeyboardAccelerator Key="Tab" Modifiers="Control, Shift" Invoked="SettingsTabPrev_Invoked" />
+                    </Grid.KeyboardAccelerators>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ScrollViewer
+                        Grid.Column="0"
+                        HorizontalScrollBarVisibility="Auto"
+                        HorizontalScrollMode="Auto"
+                        VerticalScrollMode="Disabled">
+                        <!-- Classic Buttons: active tab uses Accent (same as OK); others use Default (same as Cancel). Fluent hover/press only. -->
+                        <StackPanel
+                            x:Name="SettingsFooterTabsHost"
+                            Orientation="Horizontal"
+                            Spacing="8"
+                            VerticalAlignment="Center">
+                            <Button
+                                x:Name="SettingsTabBackup"
+                                Click="SettingsFooterTab_Click"
+                                Content="Backup"
+                                FontSize="12"
+                                MinHeight="28"
+                                MinWidth="92"
+                                Padding="10,4,10,4"
+                                Style="{StaticResource AccentButtonStyle}"
+                                Tag="0" />
+                            <Button
+                                x:Name="SettingsTabCompress"
+                                Click="SettingsFooterTab_Click"
+                                Content="Compression"
+                                FontSize="12"
+                                MinHeight="28"
+                                MinWidth="112"
+                                Padding="10,4,10,4"
+                                Style="{StaticResource DefaultButtonStyle}"
+                                Tag="1" />
+                            <Button
+                                x:Name="SettingsTabSystem"
+                                Click="SettingsFooterTab_Click"
+                                Content="System"
+                                FontSize="12"
+                                MinHeight="28"
+                                MinWidth="107"
+                                Padding="10,4,10,4"
+                                Style="{StaticResource DefaultButtonStyle}"
+                                Tag="2" />
+                        </StackPanel>
+                    </ScrollViewer>
+                    <StackPanel
+                        Grid.Column="1"
+                        HorizontalAlignment="Right"
+                        Orientation="Horizontal"
+                        Spacing="8">
+                        <Button
+                            Click="SettingsOk_Click"
+                            Content="OK"
+                            FontSize="12"
+                            MinHeight="28"
+                            Padding="10,4,10,4"
+                            Style="{StaticResource AccentButtonStyle}" />
+                        <Button
+                            Click="SettingsCancel_Click"
+                            Content="Cancel"
+                            FontSize="12"
+                            MinHeight="28"
+                            Padding="10,4,10,4"
+                            Style="{StaticResource DefaultButtonStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <TeachingTip
+            x:Name="BackupSelectionTeachingTip"
+            Grid.RowSpan="3"
+            Title="Backup without a selection"
+            Subtitle="If no games are selected, Backup includes every game that has save folders—as if you had selected them all. Pick specific rows to limit the backup."
+            PreferredPlacement="Top"
+            IsLightDismissEnabled="True"
+            Target="{x:Bind BackupButton}" />
+
+        <TeachingTip
+            x:Name="OnboardingScanAddTeachingTip"
+            Grid.RowSpan="3"
+            Title="Build your game list"
+            PreferredPlacement="Top"
+            PlacementMargin="0,12,0,0"
+            IsLightDismissEnabled="True"
+            Closed="OnboardingScanAddTeachingTip_Closed">
+            <TeachingTip.Content>
+                <TextBlock
+                    MaxWidth="340"
+                    TextWrapping="WrapWholeWords"
+                    Text="Use Scan for games to detect installs from the manifest, or Add custom game when you already know your save folder." />
+            </TeachingTip.Content>
+        </TeachingTip>
+
+        <TeachingTip
+            x:Name="CompressionEngineTeachingTip"
+            Grid.RowSpan="3"
+            Title="Faster backups with 7-Zip"
+            PreferredPlacement="Bottom"
+            PlacementMargin="0,10,0,0"
+            IsLightDismissEnabled="True"
+            Closed="CompressionEngineTeachingTip_Closed" />
+
+        <TeachingTip
+            x:Name="SettingsAfterCompressTeachingTip"
+            Grid.RowSpan="3"
+            Title="Compression in Settings"
+            PreferredPlacement="Top"
+            PlacementMargin="0,10,0,0"
+            IsLightDismissEnabled="True"
+            Closed="SettingsAfterCompressTeachingTip_Closed">
+            <TeachingTip.Content>
+                <TextBlock
+                    MaxWidth="340"
+                    TextWrapping="WrapWholeWords"
+                    Text="Tap Settings here, then open the Compression tab for more options (presets, 7-Zip, and more)." />
+            </TeachingTip.Content>
+        </TeachingTip>
+    </Grid>
+</Page>

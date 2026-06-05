@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<UserControl
+    x:Class="GSBT.WinUI.Views.SandboxMonitorSettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:controls="using:GSBT.WinUI.Controls"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <ScrollViewer
+        VerticalScrollBarVisibility="Auto"
+        Background="{ThemeResource GsbtWindowBgBrush}">
+        <StackPanel Padding="0,0,8,12" Spacing="14" MaxWidth="640" HorizontalAlignment="Center">
+            <TextBlock Text="Monitor settings" Style="{StaticResource SubtitleTextBlockStyle}" />
+            <TextBlock
+                FontSize="11"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                TextWrapping="WrapWholeWords"
+                Text="These options apply only when you launch the app with the sandbox monitor (launch_sandbox / -s / GSBT_SANDBOX=1). Most changes save immediately. Tab moves between controls; Space toggles checkboxes." />
+            <Border
+                Padding="12,10"
+                CornerRadius="8"
+                BorderBrush="{ThemeResource GsbtBorderBrush}"
+                BorderThickness="1"
+                Background="{ThemeResource GsbtCardBgBrush}">
+                <StackPanel Spacing="10">
+                    <TextBlock
+                        Text="Closing windows"
+                        FontWeight="SemiBold"
+                        FontSize="13" />
+                    <CheckBox
+                        x:Name="SyncCloseMainCheck"
+                        Content="When I close the Sandbox Monitor, also close the main GSBT window"
+                        FontSize="12" />
+                    <CheckBox
+                        x:Name="SyncCloseMainSkipCheck"
+                        Margin="18,0,0,0"
+                        Content="Don't ask again before closing both (monitor → main), when no batch is running"
+                        FontSize="12" />
+                    <CheckBox
+                        x:Name="CloseMonitorWhenMainCheck"
+                        Content="When I close the main GSBT window, also close the Sandbox Monitor"
+                        FontSize="12" />
+                    <CheckBox
+                        x:Name="CloseMonitorWhenMainSkipCheck"
+                        Margin="18,0,0,0"
+                        Content="Don't ask again before closing the monitor (main → monitor), when no batch is running"
+                        FontSize="12" />
+                    <TextBlock
+                        x:Name="BatchRunningHint"
+                        FontSize="11"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        TextWrapping="WrapWholeWords"
+                        Visibility="Collapsed"
+                        Text="A batch benchmark is running. Closing the main window or this monitor (with sync-close enabled) will always show a warning first, even if 'don't ask again' is on." />
+                </StackPanel>
+            </Border>
+
+            <Border
+                Padding="12,10"
+                CornerRadius="8"
+                BorderBrush="{ThemeResource GsbtBorderBrush}"
+                BorderThickness="1"
+                Background="{ThemeResource GsbtCardBgBrush}">
+                <StackPanel Spacing="10">
+                    <TextBlock
+                        Text="Performance charts"
+                        FontWeight="SemiBold"
+                        FontSize="13" />
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        TextWrapping="WrapWholeWords"
+                        Text="By default, CPU and RAM history update at 4 samples per second while compression or other monitored work is running. Turn on the option below to keep sampling at 1 sample per second when idle." />
+                    <CheckBox
+                        x:Name="PerfRecordWhenIdleCheck"
+                        Content="Record performance charts when idle (no compression running)"
+                        FontSize="12" />
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        TextWrapping="WrapWholeWords"
+                        Text="Series visibility (live charts and detail windows):" />
+                    <CheckBox
+                        x:Name="PerfShowGsbtCheck"
+                        Content="Show GSBT CPU and RAM"
+                        FontSize="12"
+                        IsChecked="True" />
+                    <CheckBox
+                        x:Name="PerfShowCompressionCheck"
+                        Content="Show compression CPU and RAM"
+                        FontSize="12"
+                        IsChecked="True" />
+                </StackPanel>
+            </Border>
+
+            <Border
+                Padding="12,10"
+                CornerRadius="8"
+                BorderBrush="{ThemeResource GsbtBorderBrush}"
+                BorderThickness="1"
+                Background="{ThemeResource GsbtCardBgBrush}">
+                <StackPanel Spacing="10">
+                    <TextBlock
+                        Text="Session log (Live)"
+                        FontWeight="SemiBold"
+                        FontSize="13" />
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        TextWrapping="WrapWholeWords"
+                        Text="Detail level: Verbose logs everything regardless of toggles. Normal uses the category switches below. Quiet keeps warnings, benchmark steps, and compress summaries (hides noisy scan and progress ticks)." />
+                    <controls:GsbtComboBox
+                        x:Name="LogDetailCombo"
+                        Header="Detail level"
+                        FontSize="12"
+                        MinWidth="220"
+                        HorizontalAlignment="Left" />
+                    <TextBlock Text="Categories (Normal level)" FontWeight="SemiBold" FontSize="12" />
+                    <CheckBox x:Name="LogShowScanCheck" Content="Scan &amp; detection" FontSize="12" />
+                    <CheckBox x:Name="LogShowCompressCheck" Content="Compression (ZIP / 7-Zip)" FontSize="12" />
+                    <CheckBox
+                        x:Name="LogShowCompressTicksCheck"
+                        Margin="18,0,0,0"
+                        Content="Include live compress progress lines (~% ticks)"
+                        FontSize="12" />
+                    <CheckBox x:Name="LogShowBenchmarkCheck" Content="Benchmark &amp; batch" FontSize="12" />
+                    <CheckBox x:Name="LogShowInfoCheck" Content="Info &amp; general" FontSize="12" />
+                    <CheckBox x:Name="LogShowWarnCheck" Content="Warnings" FontSize="12" />
+                    <CheckBox x:Name="LogShow7zipCheck" Content="7-Zip install / setup" FontSize="12" />
+                    <NumberBox
+                        x:Name="LogMaxTailLinesBox"
+                        Header="Max lines kept in memory (500–20000)"
+                        Minimum="500"
+                        Maximum="20000"
+                        SpinButtonPlacementMode="Inline"
+                        SmallChange="100"
+                        LargeChange="500"
+                        MinWidth="200"
+                        HorizontalAlignment="Left" />
+                    <Button
+                        x:Name="ClearLogBufferButton"
+                        Content="Clear captured log buffer"
+                        HorizontalAlignment="Left"
+                        Click="ClearLogBufferButton_Click" />
+                </StackPanel>
+            </Border>
+
+            <TextBlock
+                x:Name="SavedHint"
+                FontSize="11"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Visibility="Collapsed"
+                Text="Saved." />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

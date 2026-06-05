@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Window
+    x:Class="GSBT.WinUI.Views.SandboxMonitorWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="GSBT Sandbox Monitor">
+    <NavigationView
+        x:Name="RootNav"
+        Background="{ThemeResource GsbtWindowBgBrush}"
+        PaneDisplayMode="LeftCompact"
+        IsPaneToggleButtonVisible="True"
+        IsBackButtonVisible="Collapsed"
+        IsSettingsVisible="False"
+        OpenPaneLength="256"
+        CompactPaneLength="52"
+        IsPaneOpen="True"
+        SelectionChanged="RootNav_SelectionChanged">
+        <NavigationView.MenuItems>
+            <NavigationViewItem x:Name="SimulationsNavItem" Content="Simulations" Tag="simulations">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="SwitchApps" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Benchmark" Tag="benchmark">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Clock" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Batch benchmark" Tag="batch">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="AllApps" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem x:Name="PerformanceNavItem" Content="Performance" Tag="performance">
+                <NavigationViewItem.Icon>
+                    <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE9D9;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Log" Tag="log">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Document" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Settings" Tag="settings">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Setting" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+        </NavigationView.MenuItems>
+        <NavigationView.PaneFooter>
+            <StackPanel
+                Padding="4,8,4,10"
+                Spacing="6"
+                HorizontalAlignment="Stretch"
+                Background="Transparent">
+                <Button
+                    x:Name="ShowMainAppBarButton"
+                    MinHeight="40"
+                    Padding="10,6"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Stretch"
+                    Background="Transparent"
+                    BorderBrush="Transparent"
+                    BorderThickness="0"
+                    Click="ShowMainAppBarButton_Click"
+                    AccessKey="1"
+                    AutomationProperties.Name="Show main Game Save Backup Tool window"
+                    ToolTipService.ToolTip="Show the main Game Save Backup Tool (restores if minimized). Alt+1; Tab / Shift+Tab; Space or Enter activates.">
+                    <StackPanel
+                        Orientation="Horizontal"
+                        Spacing="10"
+                        VerticalAlignment="Center"
+                        Background="Transparent">
+                        <FontIcon
+                            FontFamily="Segoe MDL2 Assets"
+                            Glyph="&#xE75B;"
+                            FontSize="16"
+                            VerticalAlignment="Center" />
+                        <TextBlock
+                            x:Name="ShowMainFooterLabel"
+                            Text="Show main"
+                            FontSize="12"
+                            VerticalAlignment="Center"
+                            TextWrapping="NoWrap" />
+                    </StackPanel>
+                </Button>
+                <Button
+                    x:Name="MinimizeBothAppBarButton"
+                    MinHeight="40"
+                    Padding="10,6"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Stretch"
+                    Background="Transparent"
+                    BorderBrush="Transparent"
+                    BorderThickness="0"
+                    Click="MinimizeBothAppBarButton_Click"
+                    AccessKey="2"
+                    AutomationProperties.Name="Minimize main window and Sandbox Monitor"
+                    ToolTipService.ToolTip="Minimize the main window and this monitor. Alt+2; Tab / Shift+Tab; Space or Enter activates.">
+                    <StackPanel
+                        Orientation="Horizontal"
+                        Spacing="10"
+                        VerticalAlignment="Center"
+                        Background="Transparent">
+                        <FontIcon
+                            FontFamily="Segoe MDL2 Assets"
+                            Glyph="&#xE921;"
+                            FontSize="16"
+                            VerticalAlignment="Center" />
+                        <TextBlock
+                            x:Name="MinimizeBothFooterLabel"
+                            Text="Minimize both"
+                            FontSize="12"
+                            VerticalAlignment="Center"
+                            TextWrapping="NoWrap" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </NavigationView.PaneFooter>
+        <Grid
+            x:Name="ShellHostGrid"
+            Padding="16"
+            Background="{ThemeResource GsbtWindowBgBrush}">
+            <ContentControl
+                x:Name="ShellContent"
+                HorizontalContentAlignment="Stretch"
+                VerticalContentAlignment="Stretch"
+                Background="{ThemeResource GsbtWindowBgBrush}" />
+        </Grid>
+    </NavigationView>
+</Window>

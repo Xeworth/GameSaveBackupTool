@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<UserControl
+    x:Class="GSBT.WinUI.Views.SandboxBatchBenchmarkView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <ScrollViewer
+        VerticalScrollBarVisibility="Auto"
+        Background="{ThemeResource GsbtWindowBgBrush}">
+        <StackPanel Padding="0,0,8,4" Spacing="12" MaxWidth="720" HorizontalAlignment="Center">
+            <TextBlock Text="Batch compression benchmark" Style="{StaticResource SubtitleTextBlockStyle}" />
+            <TextBlock
+                FontSize="11"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                TextWrapping="WrapWholeWords"
+                Text="Queue several sandbox compressions with different presets, formats, and 7-Zip options in one run. Each step is recorded on the Benchmark tab; open Performance while a batch runs to compare CPU and RAM across steps (pink markers when each test finishes). Cancel stops the current step; Escape cancels when this panel has focus." />
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+                <Button
+                    x:Name="RunBatchButton"
+                    MinHeight="30"
+                    Padding="12,6"
+                    Content="Run batch"
+                    Click="RunBatchButton_Click" />
+                <Button
+                    x:Name="CancelBatchButton"
+                    MinHeight="30"
+                    Padding="12,6"
+                    IsEnabled="False"
+                    Content="Cancel"
+                    Click="CancelBatchButton_Click" />
+            </StackPanel>
+            <TextBlock
+                x:Name="StatusText"
+                FontSize="12"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                TextWrapping="WrapWholeWords" />
+            <StackPanel x:Name="BatchRowsPanel" Spacing="10" />
+            <Button
+                x:Name="AddRowButton"
+                HorizontalAlignment="Left"
+                MinHeight="30"
+                Padding="10,6"
+                Content="+ Add test row"
+                Click="AddRowButton_Click" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
