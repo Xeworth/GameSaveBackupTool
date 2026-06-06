@@ -30,16 +30,129 @@ public sealed partial class MainViewModel
     private bool MatchesFilter(GameRowViewModel g) =>
         GameCatalogFilter.IncludeRow(FilterMode, g.HasSaveLocation);
 
+    private string? _displaySortColumnId;
+    private bool _displaySortAscending = true;
+
+    public string? DisplaySortColumnId => _displaySortColumnId;
+
+    public bool DisplaySortAscending => _displaySortAscending;
+
+    /// <summary>Header click: sort visible rows by column (toggle direction on repeat).</summary>
+    /// <returns>True when row order changed (caller may play a sort animation).</returns>
+    public bool SortDisplayedGamesByColumn(string columnId)
+    {
+        if (string.IsNullOrWhiteSpace(columnId))
+        {
+            return false;
+        }
+
+        if (string.Equals(_displaySortColumnId, columnId, StringComparison.OrdinalIgnoreCase))
+        {
+            _displaySortAscending = !_displaySortAscending;
+        }
+        else
+        {
+            _displaySortColumnId = columnId;
+            _displaySortAscending = true;
+        }
+
+        OnPropertyChanged(nameof(DisplaySortColumnId));
+        OnPropertyChanged(nameof(DisplaySortAscending));
+
+        DisplayedGamesRebuildStarting?.Invoke(this, EventArgs.Empty);
+        try
+        {
+            return ResortDisplayedGamesInPlace();
+        }
+        finally
+        {
+            DisplayedListRebuilt?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private IComparable SortKeyForColumn(GameTableColumn def, GameRowViewModel row) =>
+        def.GetSortKey?.Invoke(row) ?? def.GetText(row);
+
+    private IEnumerable<GameRowViewModel> OrderForDisplay(IEnumerable<GameRowViewModel> source)
+    {
+        if (string.IsNullOrWhiteSpace(_displaySortColumnId))
+        {
+            return source;
+        }
+
+        var def = GameTableColumns.Definitions.FirstOrDefault(d =>
+            string.Equals(d.Id, _displaySortColumnId, StringComparison.OrdinalIgnoreCase));
+        if (def is null)
+        {
+            return source;
+        }
+
+        return _displaySortAscending
+            ? source
+                .OrderBy(r => SortKeyForColumn(def, r), Comparer<IComparable>.Default)
+                .ThenBy(r => r.GameName, StringComparer.OrdinalIgnoreCase)
+            : source
+                .OrderByDescending(r => SortKeyForColumn(def, r), Comparer<IComparable>.Default)
+                .ThenBy(r => r.GameName, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Reorder visible rows without clearing the list. Caller must raise
+    /// <see cref="DisplayedGamesRebuildStarting"/> / <see cref="DisplayedListRebuilt"/>
+    /// so transient empty ListView selection during moves does not wipe logical selection.
+    /// </summary>
+    private bool ResortDisplayedGamesInPlace()
+    {
+        if (DisplayedGames.Count < 2 || string.IsNullOrWhiteSpace(_displaySortColumnId))
+        {
+            return false;
+        }
+
+        var sorted = OrderForDisplay(DisplayedGames).ToList();
+        if (IsSameRowOrder(DisplayedGames, sorted))
+        {
+            return false;
+        }
+
+        for (var target = 0; target < sorted.Count; target++)
+        {
+            var item = sorted[target];
+            var current = DisplayedGames.IndexOf(item);
+            if (current >= 0 && current != target)
+            {
+                DisplayedGames.RemoveAt(current);
+                DisplayedGames.Insert(target, item);
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsSameRowOrder(IReadOnlyList<GameRowViewModel> current, IReadOnlyList<GameRowViewModel> sorted)
+    {
+        if (current.Count != sorted.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < current.Count; i++)
+        {
+            if (!ReferenceEquals(current[i], sorted[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private void ReapplyFilterFull()
     {
         DisplayedGamesRebuildStarting?.Invoke(this, EventArgs.Empty);
         DisplayedGames.Clear();
-        foreach (var g in Games)
+        foreach (var g in OrderForDisplay(Games.Where(MatchesFilter)))
         {
-            if (MatchesFilter(g))
-            {
-                DisplayedGames.Add(g);
-            }
+            DisplayedGames.Add(g);
         }
 
         DisplayedListRebuilt?.Invoke(this, EventArgs.Empty);
@@ -110,15 +223,27 @@ public sealed partial class MainViewModel
 
     private void SyncRowInDisplayed(GameRowViewModel row)
     {
-        var show = MatchesFilter(row);
-        var idx = DisplayedGames.IndexOf(row);
-        if (show && idx < 0)
+        if (_displaySortColumnId is not null)
+        {
+            var show = MatchesFilter(row);
+            var idx = DisplayedGames.IndexOf(row);
+            if ((show && idx < 0) || (!show && idx >= 0))
+            {
+                ReapplyFilterFull();
+            }
+
+            return;
+        }
+
+        var visible = MatchesFilter(row);
+        var at = DisplayedGames.IndexOf(row);
+        if (visible && at < 0)
         {
             DisplayedGames.Add(row);
         }
-        else if (!show && idx >= 0)
+        else if (!visible && at >= 0)
         {
-            DisplayedGames.RemoveAt(idx);
+            DisplayedGames.RemoveAt(at);
         }
     }
 

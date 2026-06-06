@@ -23,9 +23,9 @@ public static class GameTableColumns
             Id = "saveStatus",
             Header = "Save Status",
             IsStarColumn = false,
-            InitialPixelWidth = 90,
-            MinPixelWidth = 90,
-            MaxPixelWidth = 90,
+            InitialPixelWidth = 95,
+            MinPixelWidth = 95,
+            MaxPixelWidth = 95,
             GetText = r => r.SaveStatus
         },
         new GameTableColumn
@@ -42,13 +42,14 @@ public static class GameTableColumns
         new GameTableColumn
         {
             Id = "backupSize",
-            Header = "Backup Size",
+            Header = "Size",
             IsStarColumn = false,
             InitialPixelWidth = 90,
             MinPixelWidth = 90,
             MaxPixelWidth = 90,
             VisibilitySettingsKey = GameTableColumnVisibility.ShowBackupSizeColumnKey,
-            GetText = r => r.BackupSizeDisplay
+            GetText = r => r.BackupSizeDisplay,
+            GetSortKey = r => r.BackupSizeBytes
         },
         new GameTableColumn
         {

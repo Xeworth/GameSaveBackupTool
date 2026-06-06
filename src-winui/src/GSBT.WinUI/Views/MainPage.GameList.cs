@@ -19,13 +19,23 @@ public sealed partial class MainPage
     private void WireGameTableContextMenu()
     {
         GamesTable.RowContextRequested += GamesTable_RowContextRequested;
+        GamesTable.HeaderSortRequested += GamesTable_HeaderSortRequested;
         ViewModel.TeachingTipOnboardingScanAddRequested += ViewModel_OnboardingScanAddRequested;
     }
 
     private void UnwireGameTableContextMenu()
     {
         GamesTable.RowContextRequested -= GamesTable_RowContextRequested;
+        GamesTable.HeaderSortRequested -= GamesTable_HeaderSortRequested;
         ViewModel.TeachingTipOnboardingScanAddRequested -= ViewModel_OnboardingScanAddRequested;
+    }
+
+    private void GamesTable_HeaderSortRequested(string columnId)
+    {
+        if (ViewModel.SortDisplayedGamesByColumn(columnId))
+        {
+            _ = GamesTable.PlaySortCascadeFadeAsync();
+        }
     }
 
     private void ViewModel_OnboardingScanAddRequested(object? sender, EventArgs e)

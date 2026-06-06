@@ -21,6 +21,10 @@ public sealed partial class GameRowViewModel : ObservableObject
     [ObservableProperty]
     private string _backupSizeDisplay = GsbtUiText.EmDash;
 
+    /// <summary>Raw backup bytes for sorting; 0 when <see cref="BackupSizeDisplay"/> is em dash.</summary>
+    [ObservableProperty]
+    private long _backupSizeBytes;
+
     /// <summary>True when last-backup text was cleared because backup folders under the default backup path went missing (integrity reconcile).</summary>
     [ObservableProperty]
     private bool _lastBackupIntegrityWarning;

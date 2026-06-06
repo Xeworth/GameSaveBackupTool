@@ -189,7 +189,7 @@ public sealed partial class MainViewModel
         var dest = ResolveBackupDestination();
         if (string.IsNullOrWhiteSpace(dest))
         {
-            row.BackupSizeDisplay = GsbtUiText.EmDash;
+            ApplyBackupSizeToRow(row, 0);
             return;
         }
 
@@ -197,11 +197,11 @@ public sealed partial class MainViewModel
         try
         {
             var bytes = BackupRetentionVerifier.ComputeTotalRetentionBackupBytes(dest, row.GameName, subfolder);
-            row.BackupSizeDisplay = bytes <= 0 ? GsbtUiText.EmDash : BackupFolderSizeEstimator.FormatApproximateSize(bytes);
+            ApplyBackupSizeToRow(row, bytes);
         }
         catch
         {
-            row.BackupSizeDisplay = GsbtUiText.EmDash;
+            ApplyBackupSizeToRow(row, 0);
         }
     }
 
@@ -535,20 +535,20 @@ public sealed partial class MainViewModel
 
         var dest = ResolveBackupDestination();
         var subfolder = _settings.Get("backup_subfolder_per_game", true);
-        var updates = await Task.Run(() =>
-        {
-            var list = new List<(GameRowViewModel Row, string Display)>(rows.Count);
+            var updates = await Task.Run(() =>
+            {
+            var list = new List<(GameRowViewModel Row, long Bytes)>(rows.Count);
             foreach (var row in rows)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (string.IsNullOrWhiteSpace(dest))
                 {
-                    list.Add((row, GsbtUiText.EmDash));
+                    list.Add((row, 0));
                     continue;
                 }
 
                 var bytes = BackupRetentionVerifier.ComputeTotalRetentionBackupBytes(dest, row.GameName, subfolder);
-                list.Add((row, bytes <= 0 ? GsbtUiText.EmDash : BackupFolderSizeEstimator.FormatApproximateSize(bytes)));
+                list.Add((row, bytes));
             }
 
             return list;
@@ -556,11 +556,19 @@ public sealed partial class MainViewModel
 
         EnqueueUi(() =>
         {
-            foreach (var (row, display) in updates)
+            foreach (var (row, bytes) in updates)
             {
-                row.BackupSizeDisplay = display;
+                ApplyBackupSizeToRow(row, bytes);
             }
         });
+    }
+
+    private static void ApplyBackupSizeToRow(GameRowViewModel row, long bytes)
+    {
+        row.BackupSizeBytes = Math.Max(0, bytes);
+        row.BackupSizeDisplay = bytes <= 0
+            ? GsbtUiText.EmDash
+            : BackupFolderSizeEstimator.FormatApproximateSize(bytes);
     }
 
     /// <summary>Resolved backup root for UI (forward slashes).</summary>

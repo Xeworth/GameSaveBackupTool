@@ -69,7 +69,7 @@ src\GSBT.WinUI\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\gsbt.exe
 
 ## Installer (`GSBT_Setup_*.exe`)
 
-Prerequisites: successful `publish_release.bat` run **and** Inno Setup 6.
+Prerequisites: successful `publish_release.bat` run **and** Inno Setup **6.5.4+** (system light/dark wizard).
 
 From `src-winui/`:
 
@@ -78,7 +78,7 @@ scripts\publish_release.bat
 installer\build_installer.bat
 ```
 
-Output: `installer\output\GSBT_Setup_0.0.1.250605.exe` (version from `installer\GSBT_Setup.iss` — keep in sync with `AppAboutInfo.VersionDisplay`).
+Output: `installer\output\GSBT_Setup_0.0.2.260606.exe` (version from `installer\GSBT_Setup.iss` — keep in sync with `AppAboutInfo.VersionDisplay`).
 
 Override Inno path if needed:
 
@@ -99,7 +99,7 @@ From `src-winui/` (after `publish_release.bat`):
 scripts\package_portable.bat
 ```
 
-Output: `installer\output\GSBT_Portable_0.0.1.250605.zip`
+Output: `installer\output\GSBT_Portable_0.0.2.260606.zip`
 
 Or build **all** release assets in one go:
 
@@ -121,7 +121,7 @@ Typical flow:
 
 1. Bump version in `AppAboutInfo.VersionDisplay` and `installer\GSBT_Setup.iss`
 2. `scripts\package_release.bat`
-3. Create a GitHub Release (tag e.g. `v0.0.1.250605`) and attach the two binaries
+3. Create a GitHub Release (tag e.g. `v0.0.2.260606`) and attach the two binaries
 
 Web UI: repo → **Releases** → **Draft a new release** → pick tag → drag files into **Attach binaries**.
 
@@ -129,10 +129,10 @@ CLI (with [GitHub CLI](https://cli.github.com/)):
 
 ```bat
 cd src-winui
-gh release create v0.0.1.250605 ^
-  installer\output\GSBT_Setup_0.0.1.250605.exe ^
-  installer\output\GSBT_Portable_0.0.1.250605.zip ^
-  --title "GSBT v0.0.1.250605" ^
+gh release create v0.0.2.260606 ^
+  installer\output\GSBT_Setup_0.0.2.260606.exe ^
+  installer\output\GSBT_Portable_0.0.2.260606.zip ^
+  --title "GSBT v0.0.2.260606" ^
   --notes-file ..\CHANGELOG.md
 ```
 

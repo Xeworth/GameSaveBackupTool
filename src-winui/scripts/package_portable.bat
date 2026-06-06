@@ -35,16 +35,10 @@ if errorlevel 8 (
     exit /b 1
 )
 
-set "SANDBOX_EXE=%STAGE%\gsbt-sandbox.exe"
-set "SANDBOX_PRI=%STAGE%\gsbt-sandbox.pri"
-if exist "%SANDBOX_EXE%" del /f /q "%SANDBOX_EXE%"
-if exist "%SANDBOX_PRI%" del /f /q "%SANDBOX_PRI%"
-
-echo Creating sandbox hard links for portable package...
-cmd /c mklink /H "%SANDBOX_EXE%" "%STAGE%\gsbt.exe" >nul 2>&1
-cmd /c mklink /H "%SANDBOX_PRI%" "%STAGE%\gsbt.pri" >nul 2>&1
-if not exist "%SANDBOX_EXE%" (
-    echo WARNING: gsbt-sandbox.exe hard link was not created. Portable users can still run gsbt.exe -s
+if not exist "%STAGE%\gsbt-sandbox.exe" (
+    echo ERROR: gsbt-sandbox.exe missing. Run scripts\publish_release.bat first.
+    rd /s /q "%STAGE%"
+    exit /b 1
 )
 
 copy /Y "%~dp0..\installer\PORTABLE.txt" "%STAGE%\README.txt" >nul

@@ -20,9 +20,9 @@ if /i "%~1"=="trimmed" (
 
 if errorlevel 1 exit /b 1
 
-rem WinApp SDK may still copy many locale folders; keep English + app folders only.
+rem WinApp SDK may still copy many locale folders; keep English (en-us) + app folders only.
 powershell -NoProfile -Command ^
-  "$out='%OUT%'; $keep=@('en-us','en-GB','branding','data','Microsoft.UI.Xaml','NpuDetect','Assets'); Get-ChildItem -LiteralPath $out -Directory | Where-Object { $keep -notcontains $_.Name } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+  "$out='%OUT%'; $keep=@('en-us','branding','data','Microsoft.UI.Xaml','NpuDetect','Assets'); Get-ChildItem -LiteralPath $out -Directory | Where-Object { $keep -notcontains $_.Name } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 
 rem WinUI unpackaged installs require the app Assets folder beside gsbt.exe (not only gsbt.pri).
 set "BUILD_ASSETS=%CD%\src\GSBT.WinUI\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\Assets"
@@ -31,9 +31,8 @@ if exist "%BUILD_ASSETS%" (
     xcopy /E /I /Y /Q "%BUILD_ASSETS%\*" "%OUT%\Assets\" >nul
 )
 
-rem Sandbox hard links are created by the installer post-install; never ship them inside publish\.
-if exist "%OUT%\gsbt-sandbox.exe" del /f /q "%OUT%\gsbt-sandbox.exe"
-if exist "%OUT%\gsbt-sandbox.pri" del /f /q "%OUT%\gsbt-sandbox.pri"
+call "%~dp0publish_sandbox_entry.bat" "%OUT%"
+if errorlevel 1 exit /b 1
 
 call "%~dp0validate_publish.bat" "%OUT%"
 if errorlevel 1 exit /b 1

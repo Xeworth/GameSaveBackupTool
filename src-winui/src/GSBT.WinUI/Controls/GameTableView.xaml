@@ -26,6 +26,13 @@
             <Setter Property="Foreground" Value="{ThemeResource GsbtBodyTextBrush}" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         </Style>
+        <!-- Sort triangle size/spacing: tune FontSize and Margin here. -->
+        <Style x:Key="GsbtTableHeaderSortIndicatorStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Foreground" Value="{ThemeResource GsbtBodyTextBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="2,0,0,0" />
+        </Style>
         <Style x:Key="GsbtTableRowCellBorderStyle" TargetType="Border">
             <Setter Property="BorderBrush" Value="{ThemeResource GsbtTableGridLineBrush}" />
         </Style>
@@ -85,6 +92,10 @@
                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                     ScrollViewer.VerticalScrollBarVisibility="Auto"
                     SelectionMode="Extended">
+                    <!-- Empty: skip default reorder slide; sort uses PlaySortCascadeFadeAsync instead. -->
+                    <ListView.ItemContainerTransitions>
+                        <TransitionCollection />
+                    </ListView.ItemContainerTransitions>
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="vm:GameRowViewModel">
                             <Grid x:Name="PART_RowRoot" Height="28" Style="{StaticResource GsbtTableRowRootStyle}" />

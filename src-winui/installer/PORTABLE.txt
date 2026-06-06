@@ -9,13 +9,13 @@ No installer required. .NET 8 and the Windows App SDK are already bundled.
 
 Sandbox (optional developer mode)
 ---------------------------------
-  gsbt.exe -s
-  gsbt-sandbox.exe   (if the hard link was created in this zip)
+  gsbt-sandbox.exe   (same app with sandbox monitor enabled)
+  gsbt.exe -s        (equivalent)
 
 Settings and data
 -----------------
 Same as the installed edition:
-  %AppData%\GSBT\
+  %AppData%\GSBT\winui\
 
 Uninstall
 ---------

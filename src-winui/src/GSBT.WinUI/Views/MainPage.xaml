@@ -81,7 +81,9 @@
             <Grid x:Name="MainContentArea" Padding="16,16,16,0">
                 <controls:GameTableView
                     x:Name="GamesTable"
-                    ItemsSource="{x:Bind ViewModel.DisplayedGames, Mode=OneWay}" />
+                    ItemsSource="{x:Bind ViewModel.DisplayedGames, Mode=OneWay}"
+                    SortAscending="{x:Bind ViewModel.DisplaySortAscending, Mode=OneWay}"
+                    SortColumnId="{x:Bind ViewModel.DisplaySortColumnId, Mode=OneWay}" />
             </Grid>
             <!-- Stacked: integrity above toast. Row0 * keeps strip bottom-aligned so when the toast row collapses the strip eases down smoothly. -->
             <Grid

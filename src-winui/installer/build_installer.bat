@@ -28,6 +28,8 @@ if not exist "%CD%\installer\output" mkdir "%CD%\installer\output"
 echo Compiling installer with:
 echo   %ISCC_EXE%
 echo.
+echo NOTE: WizardStyle=modern dynamic requires Inno Setup 6.5.4 or newer.
+echo.
 "%ISCC_EXE%" "%ISS%"
 if errorlevel 1 exit /b 1
 

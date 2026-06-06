@@ -27,4 +27,7 @@ public sealed class GameTableColumn
     public string? VisibilitySettingsKey { get; init; }
 
     public required Func<GameRowViewModel, string> GetText { get; init; }
+
+    /// <summary>When set, column sort uses this key instead of <see cref="GetText"/> (e.g. byte size vs formatted label).</summary>
+    public Func<GameRowViewModel, IComparable>? GetSortKey { get; init; }
 }

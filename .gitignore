@@ -42,7 +42,8 @@ src-winui/logs/*.txt
 logs/*.txt
 *.log
 
-# Release artifacts (installer exe, portable zip — upload via GitHub Releases, not git)
+# Release build tools (downloaded on first publish_sandbox_entry.bat run)
+src-winui/scripts/tools/
 src-winui/installer/output/
 installer/output/
 *.iss.bak

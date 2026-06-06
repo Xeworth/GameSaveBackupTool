@@ -13,6 +13,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Windows.Foundation;
 using Windows.System;
 using Windows.UI.Core;
@@ -21,6 +22,15 @@ namespace GSBT.WinUI.Controls;
 
 public sealed partial class GameTableView : UserControl
 {
+    /// <summary>Per-row fade length after header sort (ms). Tune in GameTableView.xaml.cs.</summary>
+    private const double SortFadeRowDurationMs = 100;
+
+    /// <summary>Max delay between first and last visible row (ms). Tune in GameTableView.xaml.cs.</summary>
+    private const double SortFadeMaxSpreadMs = 180;
+
+    /// <summary>Starting opacity for the cascade fade (0–1). Tune in GameTableView.xaml.cs.</summary>
+    private const double SortFadeStartOpacity = 0.45;
+
     private static readonly Brush LastBackupIntegrityWarningForeground =
         new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 102, 102));
 
@@ -126,6 +136,71 @@ public sealed partial class GameTableView : UserControl
     /// <summary>Exposes the inner list for selection, shortcuts, and double-click handlers outside this control.</summary>
     public ListView RowsListView => GamesGrid;
 
+    /// <summary>Quick top-to-bottom opacity cascade after the list reorders on header sort.</summary>
+    public async Task PlaySortCascadeFadeAsync()
+    {
+        var count = GamesGrid.Items.Count;
+        if (count == 0)
+        {
+            return;
+        }
+
+        // Let ListView lay out containers after the collection reorder.
+        await Task.Yield();
+
+        var staggerMs = count <= 1 ? 0.0 : SortFadeMaxSpreadMs / (count - 1);
+        var animations = new List<Task>();
+
+        for (var i = 0; i < count; i++)
+        {
+            if (GamesGrid.ContainerFromItem(GamesGrid.Items[i]) is not ListViewItem row)
+            {
+                continue;
+            }
+
+            row.Opacity = SortFadeStartOpacity;
+            var delayMs = (int)Math.Round(i * staggerMs);
+            animations.Add(AnimateListRowOpacityAsync(row, SortFadeStartOpacity, 1.0, SortFadeRowDurationMs, delayMs));
+        }
+
+        if (animations.Count == 0)
+        {
+            return;
+        }
+
+        await Task.WhenAll(animations);
+    }
+
+    private static async Task AnimateListRowOpacityAsync(
+        ListViewItem row,
+        double from,
+        double to,
+        double durationMs,
+        int delayMs)
+    {
+        if (delayMs > 0)
+        {
+            await Task.Delay(delayMs);
+        }
+
+        var tcs = new TaskCompletionSource<bool>();
+        var storyboard = new Storyboard();
+        var anim = new DoubleAnimation
+        {
+            From = from,
+            To = to,
+            Duration = TimeSpan.FromMilliseconds(durationMs),
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+            EnableDependentAnimation = true,
+        };
+        Storyboard.SetTarget(anim, row);
+        Storyboard.SetTargetProperty(anim, "Opacity");
+        storyboard.Children.Add(anim);
+        storyboard.Completed += (_, _) => tcs.TrySetResult(true);
+        storyboard.Begin();
+        await tcs.Task;
+    }
+
     public object? ItemsSource
     {
         get => GetValue(ItemsSourceProperty);
@@ -138,6 +213,43 @@ public sealed partial class GameTableView : UserControl
             typeof(object),
             typeof(GameTableView),
             new PropertyMetadata(null, OnItemsSourceChanged));
+
+    public string? SortColumnId
+    {
+        get => (string?)GetValue(SortColumnIdProperty);
+        set => SetValue(SortColumnIdProperty, value);
+    }
+
+    public static readonly DependencyProperty SortColumnIdProperty =
+        DependencyProperty.Register(
+            nameof(SortColumnId),
+            typeof(string),
+            typeof(GameTableView),
+            new PropertyMetadata(null, OnSortDisplayChanged));
+
+    public bool SortAscending
+    {
+        get => (bool)GetValue(SortAscendingProperty);
+        set => SetValue(SortAscendingProperty, value);
+    }
+
+    public static readonly DependencyProperty SortAscendingProperty =
+        DependencyProperty.Register(
+            nameof(SortAscending),
+            typeof(bool),
+            typeof(GameTableView),
+            new PropertyMetadata(true, OnSortDisplayChanged));
+
+    /// <summary>User clicked a column title to sort.</summary>
+    public event Action<string>? HeaderSortRequested;
+
+    private static void OnSortDisplayChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is GameTableView v)
+        {
+            v.BuildHeader();
+        }
+    }
 
     private static void OnItemsSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
@@ -406,41 +518,67 @@ public sealed partial class GameTableView : UserControl
         for (var col = 0; col < _visibleDefs.Count; col++)
         {
             var def = _visibleDefs[col];
-            var cell = new Border
-            {
-                Style = (Style)Resources["GsbtTableHeaderCellBorderStyle"],
-                BorderThickness = new Thickness(0),
-                Padding = col == 0 ? new Thickness(10, 0, 8, 0) : new Thickness(8, 0, 8, 0)
-            };
-            Grid.SetColumn(cell, col);
-
-            if (col == 0)
-            {
-                var inner = new Grid();
-                inner.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                var title = new TextBlock
-                {
-                    Text = def.Header,
-                    Margin = new Thickness(10, 0, 0, 0),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Style = (Style)Resources["GsbtTableHeaderTextStyle"]
-                };
-                Grid.SetColumn(title, 0);
-                inner.Children.Add(title);
-                cell.Child = inner;
-            }
-            else
-            {
-                cell.Child = new TextBlock
-                {
-                    Text = def.Header,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Style = (Style)Resources["GsbtTableHeaderTextStyle"]
-                };
-            }
-
+            var cell = CreateHeaderCell(def, col);
             HeaderGrid.Children.Add(cell);
         }
+    }
+
+    private Border CreateHeaderCell(GameTableColumn def, int col)
+    {
+        var cell = new Border
+        {
+            Style = (Style)Resources["GsbtTableHeaderCellBorderStyle"],
+            BorderThickness = new Thickness(0),
+            Padding = col == 0 ? new Thickness(10, 0, 8, 0) : new Thickness(8, 0, 8, 0),
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            Tag = def.Id,
+        };
+        Grid.SetColumn(cell, col);
+        cell.PointerPressed += HeaderCell_PointerPressed;
+        cell.Child = CreateHeaderLabelContent(def, col);
+        return cell;
+    }
+
+    private UIElement CreateHeaderLabelContent(GameTableColumn def, int col)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Spacing = 1,
+            IsHitTestVisible = false,
+            Margin = col == 0 ? new Thickness(10, 0, 0, 0) : new Thickness(0),
+        };
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = def.Header,
+            VerticalAlignment = VerticalAlignment.Center,
+            Style = (Style)Resources["GsbtTableHeaderTextStyle"],
+        });
+
+        if (string.Equals(SortColumnId, def.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            // Glyph choice: \u25B4/\u25BE (small), \u25B2/\u25BC (filled, reads larger at same FontSize).
+            panel.Children.Add(new TextBlock
+            {
+                Text = SortAscending ? "\u25B4" : "\u25BE",
+                Style = (Style)Resources["GsbtTableHeaderSortIndicatorStyle"],
+            });
+        }
+
+        return panel;
+    }
+
+    private void HeaderCell_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is not Border { Tag: string columnId })
+        {
+            return;
+        }
+
+        HeaderSortRequested?.Invoke(columnId);
+        e.Handled = true;
     }
 
     private void FillColumnDefinitions(Grid grid)
@@ -535,6 +673,8 @@ public sealed partial class GameTableView : UserControl
 
         args.RegisterUpdateCallback((_, a) =>
         {
+            a.ItemContainer.Opacity = 1.0;
+
             if (a.ItemContainer.ContentTemplateRoot is not Grid rowGrid)
             {
                 return;

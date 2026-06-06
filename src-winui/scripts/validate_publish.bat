@@ -18,14 +18,8 @@ call :require_file "%OUT%\WinRT.Runtime.dll" "WinRT.Runtime.dll"
 call :require_min_size "%OUT%\System.Runtime.InteropServices.dll" 90000 "System.Runtime.InteropServices.dll"
 call :require_min_size "%OUT%\WinRT.Runtime.dll" 500000 "WinRT.Runtime.dll"
 
-if exist "%OUT%\gsbt-sandbox.exe" (
-    echo ERROR: publish\gsbt-sandbox.exe must not be present. Remove it before building the installer.
-    set "ERR=1"
-)
-if exist "%OUT%\gsbt-sandbox.pri" (
-    echo ERROR: publish\gsbt-sandbox.pri must not be present. Remove it before building the installer.
-    set "ERR=1"
-)
+call :require_file "%OUT%\gsbt-sandbox.exe" "gsbt-sandbox.exe"
+call :require_file "%OUT%\gsbt-sandbox.pri" "gsbt-sandbox.pri"
 
 if "%ERR%"=="1" (
     echo.
