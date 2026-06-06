@@ -30,7 +30,7 @@ public sealed class SaveCatalogManager
         }
         else
         {
-            var appData = UserDataDir.GetAppUserDataDir();
+            var appData = UserDataDir.GetWinUiUserDataDir();
             CatalogPath = Path.Combine(appData, "game_save_data.json");
             LegacyCatalogPath = legacyCatalogPath ?? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "config", "game_save_data.json"));
         }

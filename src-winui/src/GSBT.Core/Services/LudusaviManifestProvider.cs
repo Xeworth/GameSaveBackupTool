@@ -25,7 +25,7 @@ public sealed class LudusaviManifestProvider
 
     public LudusaviManifestProvider(string? dataDir = null, string? bundledManifestPath = null, HttpClient? httpClient = null)
     {
-        _dataDir = dataDir ?? UserDataDir.GetAppUserDataDir();
+        _dataDir = dataDir ?? UserDataDir.GetWinUiUserDataDir();
         _manifestPath = Path.Combine(_dataDir, ManifestFilename);
         _metaPath = Path.Combine(_dataDir, MetaFilename);
         _bundledManifestPath = bundledManifestPath;

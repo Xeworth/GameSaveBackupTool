@@ -302,12 +302,16 @@ public sealed partial class MainViewModel : ObservableObject
 
         UpdateFilterLabel();
         ReapplyFilterFull();
-        _autoBackup.RestartMonitoringIfNeeded();
 
         _backupIntegrityCoordinator = new DefaultBackupIntegrityCoordinator(
             _settings,
             _dispatcher,
             ReconcileLastBackupDiskIntegrity);
+
+        TryRestoreSavedGameListOnStartup();
+
+        _autoBackup.RestartMonitoringIfNeeded();
+
         EnqueueUi(ReconcileLastBackupDiskIntegrity);
 
         if (App.IsSandboxSimulationChild)

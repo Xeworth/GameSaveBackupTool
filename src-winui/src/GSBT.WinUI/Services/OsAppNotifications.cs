@@ -1,3 +1,4 @@
+using GSBT.Core.Common;
 using GSBT.WinUI.Common;
 using GSBT.WinUI.ViewModels;
 using Microsoft.Windows.AppNotifications;
@@ -149,10 +150,7 @@ public static class OsAppNotifications
     /// </summary>
     private static string CopyIconForNotificationRegistration(string sourcePath, string iconFileName)
     {
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "GSBT",
-            "notifications");
+        var dir = Path.Combine(UserDataDir.GetWinUiUserDataDir(), "notifications");
         Directory.CreateDirectory(dir);
         var dest = Path.Combine(dir, iconFileName);
         File.Copy(sourcePath, dest, overwrite: true);

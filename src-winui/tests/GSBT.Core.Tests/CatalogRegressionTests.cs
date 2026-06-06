@@ -55,4 +55,12 @@ public sealed class CatalogRegressionTests
         var appData = UserDataDir.GetAppUserDataDir();
         Assert.Equal("GSBT", Path.GetFileName(appData.TrimEnd('\\', '/')));
     }
+
+    [Fact]
+    public void WinUi_user_data_dir_lives_under_gsbt_root()
+    {
+        var root = UserDataDir.GetAppUserDataDir();
+        var winUi = UserDataDir.GetWinUiUserDataDir();
+        Assert.Equal(Path.Combine(root, UserDataDir.WinUiSubdir), winUi.TrimEnd('\\', '/'), StringComparer.OrdinalIgnoreCase);
+    }
 }

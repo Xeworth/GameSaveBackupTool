@@ -13,7 +13,7 @@ public sealed partial class MainViewModel
 
         if (App.IsSandboxSimulationChild)
         {
-            StatusText = "Manifest download is disabled in the simulation ÔÇö using the bundled / on-disk manifest only.";
+            StatusText = "Manifest download is disabled in the simulation — using the bundled / on-disk manifest only.";
             _sandboxLog.Log("scan", StatusText);
             await Task.CompletedTask;
             return;
@@ -40,10 +40,12 @@ public sealed partial class MainViewModel
         IsScanning = true;
         IsBusy = true;
         ScanProgress = 0;
-        StatusText = "Loading sandbox simulation gamesÔÇª";
+        StatusText = "Loading sandbox simulation games…";
         _sandboxLog.Log("scan", StatusText);
         try
         {
+            ClearScanDerivedGameRows();
+
             var dummyRoot = SimulationSessionContext.SessionDummyDataRoot;
             var bundled = SimulationSessionContext.BundledDummyDataRoot;
             var hasBundled = Directory.Exists(bundled);
@@ -69,6 +71,7 @@ public sealed partial class MainViewModel
                 IsScanning = false;
                 IsBusy = false;
                 MarkSavedGameListEstablished();
+                MergeUserAddedCatalogRowsIntoGames();
                 StatusText = $"Scan complete. {Games.Count} simulated game(s).";
                 ReconcileLastBackupDiskIntegrity();
                 RefreshLastBackupDisplays();
@@ -107,6 +110,7 @@ public sealed partial class MainViewModel
         IsScanning = true;
         IsBusy = true;
         ScanProgress = 0;
+        ClearScanDerivedGameRows();
         StatusText = "Scanning for installed games...";
         _sandboxLog.Log("scan", StatusText);
 
@@ -148,18 +152,18 @@ public sealed partial class MainViewModel
             MarkSavedGameListEstablished();
             EnqueueUi(() =>
             {
-                MergeUserAddedCatalogRowsIntoGames();
+                FinalizeScanIntoGameList(detected, toScan);
                 StatusText = Games.Count > 0
                     ? "Nothing new to look up — skipped titles are unchanged. Custom games remain listed."
                     : "No titles left to scan. Games previously remembered with no usable save folder are skipped — remove those rows from the list or edit game_save_data.json if you need another attempt.";
                 ReconcileLastBackupDiskIntegrity();
                 RefreshLastBackupDisplays();
-                ReapplyFilterFull();
             });
             _sandboxLog.Log("warn", "Nothing new to look up for installed titles.");
             _autoBackup.RestartMonitoringIfNeeded();
             return;
         }
+
         var total = toScan.Count;
         var done = 0;
         var dedupeSharedSaves = !_settings.Get("show_duplicate_save_titles", false);
@@ -175,7 +179,7 @@ public sealed partial class MainViewModel
             {
                 EnqueueUi(() => { UpsertFromResult(result); });
 
-                _sandboxLog.Log("scan", $"{result.Name} ÔåÆ {(string.IsNullOrWhiteSpace(result.SavePathResolved) && !result.SaveInRegistryOnly ? "no path" : "ok")}");
+                _sandboxLog.Log("scan", $"{result.Name} → {(string.IsNullOrWhiteSpace(result.SavePathResolved) && !result.SaveInRegistryOnly ? "no path" : "ok")}");
             },
             trace: null,
             onProgressTick: () => EnqueueUi(() =>
@@ -184,6 +188,7 @@ public sealed partial class MainViewModel
                 ScanProgress = total == 0 ? 0 : (double)done / total * 100.0;
                 StatusText = $"Fetching save paths... ({done}/{total})";
             }),
+            onDroppedFromDedup: dropped => EnqueueUi(() => RemoveScanRowsByName(dropped)),
             deduplicateSharedSaveFolders: dedupeSharedSaves);
 
         // Parallel work completes before UI-thread enqueues finish; give the dispatcher time to apply rows.
@@ -194,11 +199,10 @@ public sealed partial class MainViewModel
             IsScanning = false;
             IsBusy = false;
             MarkSavedGameListEstablished();
-            MergeUserAddedCatalogRowsIntoGames();
+            FinalizeScanIntoGameList(detected, toScan);
             StatusText = $"Scan complete. {Games.Count} game(s) in catalog.";
             ReconcileLastBackupDiskIntegrity();
             RefreshLastBackupDisplays();
-            ReapplyFilterFull();
             if (Games.Count > 0 && !IsTeachingTipMarkedShown("backup_bulk_teaching_tip_shown"))
             {
                 TeachingTipBackupBulkRequested?.Invoke(this, EventArgs.Empty);

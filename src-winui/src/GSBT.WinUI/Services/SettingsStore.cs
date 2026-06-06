@@ -4,7 +4,7 @@ using GSBT.Core.Common;
 namespace GSBT.WinUI.Services;
 
 /// <summary>
-/// Persists UI settings under %AppData%\Roaming\GSBT (same tree as catalog/Ludusavi data).
+/// Persists UI settings under <c>%AppData%\Roaming\GSBT\winui\winui_settings.json</c>.
 /// Unpackaged WinUI apps cannot use <see cref="Windows.Storage.ApplicationData.Current"/> without package identity.
 /// </summary>
 public sealed class SettingsStore
@@ -13,7 +13,7 @@ public sealed class SettingsStore
     private readonly string _path;
     private Dictionary<string, JsonElement> _data;
 
-    /// <summary>Default Roaming GSBT settings path.</summary>
+    /// <summary>Default Roaming GSBT WinUI settings path.</summary>
     public SettingsStore()
         : this(null)
     {
@@ -27,8 +27,7 @@ public sealed class SettingsStore
     {
         if (string.IsNullOrWhiteSpace(settingsDirectory))
         {
-            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GSBT");
-            Directory.CreateDirectory(dir);
+            var dir = UserDataDir.GetWinUiUserDataDir();
             _path = Path.Combine(dir, "winui_settings.json");
             MigrateFromLocalAppDataIfNeeded();
         }

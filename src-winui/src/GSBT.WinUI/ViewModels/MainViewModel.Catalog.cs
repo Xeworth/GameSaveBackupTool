@@ -641,6 +641,140 @@ public sealed partial class MainViewModel
     }
     private void MarkSavedGameListEstablished() => _settings.Set(SavedGameListEstablishedKey, true);
 
+    public bool HasSavedGameListEstablished() => _settings.Get(SavedGameListEstablishedKey, false);
+
+    /// <summary>Return visit: hydrate the grid from the persisted catalog (scan + custom rows).</summary>
+    private void RestoreSavedGameListFromCatalog()
+    {
+        foreach (var kv in _catalogManager.Catalog)
+        {
+            if (!CatalogUserAdded.IsUserAddedEntry(kv.Value))
+            {
+                continue;
+            }
+
+            if (Games.Any(g => string.Equals(g.GameName, kv.Key, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            if (TryCreateRowFromCatalog(kv.Key, kv.Value) is { } customRow)
+            {
+                Games.Add(customRow);
+                SyncRowInDisplayed(customRow);
+            }
+        }
+
+        var scanResults = new List<SaveScanResult>();
+        foreach (var kv in _catalogManager.Catalog)
+        {
+            if (CatalogUserAdded.IsUserAddedEntry(kv.Value))
+            {
+                continue;
+            }
+
+            if (TryBuildScanResultFromCatalog(kv.Key, kv.Value) is { } scanRow)
+            {
+                scanResults.Add(scanRow);
+            }
+        }
+
+        var toRestore = scanResults;
+        if (!_settings.Get("show_duplicate_save_titles", false) && scanResults.Count > 1)
+        {
+            var (kept, dropped) = GameScanPostProcessor.DeduplicateBySharedSaveRoot(scanResults);
+            if (dropped.Count > 0)
+            {
+                _catalogManager.DeleteGames(dropped);
+                _catalogManager.Flush();
+            }
+
+            toRestore = kept.ToList();
+        }
+
+        foreach (var result in toRestore)
+        {
+            if (Games.Any(g => string.Equals(g.GameName, result.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            if (!_catalogManager.TryGetCatalogEntryInsensitive(result.Name, out var catalogKey, out var row))
+            {
+                continue;
+            }
+
+            if (TryCreateRowFromCatalog(catalogKey, row) is { } vm)
+            {
+                Games.Add(vm);
+                SyncRowInDisplayed(vm);
+            }
+        }
+
+        if (Games.Count == 0)
+        {
+            return;
+        }
+
+        StatusText = $"Loaded {Games.Count} game(s). Click 'Scan' to refresh installs and save paths.";
+        ReconcileLastBackupDiskIntegrity();
+        RefreshLastBackupDisplays();
+        ReapplyFilterFull();
+    }
+
+    private SaveScanResult? TryBuildScanResultFromCatalog(string gameName, Dictionary<string, object?> row)
+    {
+        if (string.IsNullOrWhiteSpace(gameName))
+        {
+            return null;
+        }
+
+        var regOnly = CatalogUserAdded.CoerceBool(row.GetValueOrDefault("save_in_registry_only"));
+        var rawPath = CatalogUserAdded.CoerceString(row.GetValueOrDefault("save_path"));
+        var appId = CatalogUserAdded.CoerceString(row.GetValueOrDefault("steam_app_id"));
+        var platform = CatalogUserAdded.CoerceString(row.GetValueOrDefault("platform"))
+            ?? (!string.IsNullOrWhiteSpace(appId) ? "Steam" : "Unknown");
+
+        string? resolved = null;
+        if (!regOnly && !string.IsNullOrWhiteSpace(rawPath))
+        {
+            resolved = _catalogManager.ResolvePath(rawPath, null);
+        }
+
+        return new SaveScanResult
+        {
+            RowId = gameName,
+            Name = gameName,
+            AppId = appId,
+            InstallPath = null,
+            Platform = platform,
+            SavePathRaw = rawPath,
+            SavePathResolved = resolved,
+            SaveInRegistryOnly = regOnly,
+            SaveRegistryHive = CatalogUserAdded.CoerceString(row.GetValueOrDefault("save_registry_hive")),
+            SaveRegistrySubkey = CatalogUserAdded.CoerceString(row.GetValueOrDefault("save_registry_subkey")),
+            Source = "Cached",
+            WallSec = 0,
+            ScanOutcome = CatalogUserAdded.CoerceString(row.GetValueOrDefault("scan_outcome")) ?? "NO_MANIFEST_PATHS",
+        };
+    }
+
+    private void TryRestoreSavedGameListOnStartup()
+    {
+        if (!HasSavedGameListEstablished())
+        {
+            if (_catalogManager.Catalog.Count == 0)
+            {
+                return;
+            }
+
+            // Migrated catalog from an older layout — treat as an existing saved list.
+            MarkSavedGameListEstablished();
+        }
+
+        RestoreSavedGameListFromCatalog();
+    }
+
     private void StartWithEmptyGameListUi()
     {
         DisplayedGamesRebuildStarting?.Invoke(this, EventArgs.Empty);
@@ -648,6 +782,35 @@ public sealed partial class MainViewModel
         DisplayedGames.Clear();
         _logicalSelection.Clear();
         StatusText = "Ready. Click 'Scan for games'.";
+    }
+
+    /// <summary>Removes install-scan rows so a new scan rebuilds the list (custom games are kept).</summary>
+    private void ClearScanDerivedGameRows()
+    {
+        var toRemove = Games.Where(g => !g.IsUserAdded).ToList();
+        foreach (var row in toRemove)
+        {
+            _logicalSelection.Remove(row);
+            Games.Remove(row);
+            DisplayedGames.Remove(row);
+        }
+    }
+
+    /// <summary>After same-save-folder dedupe, drop merged-away titles from the grid.</summary>
+    private void RemoveScanRowsByName(IReadOnlyList<string> names)
+    {
+        if (names.Count == 0)
+        {
+            return;
+        }
+
+        var drop = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+        foreach (var row in Games.Where(g => !g.IsUserAdded && drop.Contains(g.GameName)).ToList())
+        {
+            _logicalSelection.Remove(row);
+            Games.Remove(row);
+            DisplayedGames.Remove(row);
+        }
     }
 
     private void MergeUserAddedCatalogRowsIntoGames()
@@ -672,6 +835,48 @@ public sealed partial class MainViewModel
         }
     }
 
+    /// <summary>
+    /// Re-adds installed titles skipped by save lookup (already catalogued with no usable save path).
+    /// </summary>
+    private void MergeSkippedDetectedCatalogRows(IReadOnlyList<GameRecord> detected, IReadOnlyList<GameRecord> scannedForSaveLookup)
+    {
+        var scannedKeys = new HashSet<string>(
+            scannedForSaveLookup.Select(CatalogGameKeys.FromDetectedGame),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var g in detected)
+        {
+            var key = CatalogGameKeys.FromDetectedGame(g);
+            if (scannedKeys.Contains(key))
+            {
+                continue;
+            }
+
+            if (!_catalogManager.TryGetCatalogEntryInsensitive(key, out var catalogKey, out var row))
+            {
+                continue;
+            }
+
+            if (Games.Any(x => string.Equals(x.GameName, catalogKey, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            if (TryCreateRowFromCatalog(catalogKey, row) is { } vm)
+            {
+                Games.Add(vm);
+                SyncRowInDisplayed(vm);
+            }
+        }
+    }
+
+    private void FinalizeScanIntoGameList(IReadOnlyList<GameRecord> detected, IReadOnlyList<GameRecord> scannedForSaveLookup)
+    {
+        MergeSkippedDetectedCatalogRows(detected, scannedForSaveLookup);
+        MergeUserAddedCatalogRowsIntoGames();
+        ReapplyFilterFull();
+    }
+
     private GameRowViewModel? TryCreateRowFromCatalog(string gameName, Dictionary<string, object?> row)
     {
         if (string.IsNullOrWhiteSpace(gameName))
@@ -684,8 +889,9 @@ public sealed partial class MainViewModel
         var sub = CatalogUserAdded.CoerceString(row.GetValueOrDefault("save_registry_subkey"));
         var rawPath = CatalogUserAdded.CoerceString(row.GetValueOrDefault("save_path"));
         var isUser = CatalogUserAdded.IsUserAddedEntry(row);
+        var steamAppId = CatalogUserAdded.CoerceString(row.GetValueOrDefault("steam_app_id"));
         var platform = CatalogUserAdded.CoerceString(row.GetValueOrDefault("platform"))
-            ?? (isUser ? "Custom" : "Unknown");
+            ?? (isUser ? "Custom" : !string.IsNullOrWhiteSpace(steamAppId) ? "Steam" : "Unknown");
 
         string? resolved = null;
         if (!regOnly && !string.IsNullOrWhiteSpace(rawPath))

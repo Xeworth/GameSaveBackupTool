@@ -48,6 +48,7 @@ public sealed class ScanService
         Action<SaveScanResult> onEach,
         Action<string>? trace = null,
         Action? onProgressTick = null,
+        Action<IReadOnlyList<string>>? onDroppedFromDedup = null,
         int maxWorkers = 6,
         bool deduplicateSharedSaveFolders = true,
         CancellationToken cancellationToken = default)
@@ -85,6 +86,7 @@ public sealed class ScanService
             if (droppedNames.Count > 0)
             {
                 _saveCatalogManager.DeleteGames(droppedNames);
+                onDroppedFromDedup?.Invoke(droppedNames);
             }
 
             foreach (var r in kept)

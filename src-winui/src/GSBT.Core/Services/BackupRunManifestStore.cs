@@ -8,7 +8,7 @@ using GSBT.Core.Models;
 namespace GSBT.Core.Services;
 
 /// <summary>
-/// Persists per–backup-run checkpoints under <c>%AppData%\GSBT\backup_run_checkpoints\</c> (hidden from the backup folder itself).
+/// Persists per–backup-run checkpoints under <c>%AppData%\GSBT\winui\backup_run_checkpoints\</c> (hidden from the backup folder itself).
 /// </summary>
 public static class BackupRunManifestStore
 {
@@ -23,7 +23,7 @@ public static class BackupRunManifestStore
     };
 
     public static string GetCheckpointsRootDirectory() =>
-        Path.Combine(UserDataDir.GetAppUserDataDir(), CheckpointsSubDir);
+        Path.Combine(UserDataDir.GetWinUiUserDataDir(), CheckpointsSubDir);
 
     public static string GetStoragePathForBackupRun(string backupRunFullPath)
     {

@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using GSBT.WinUI;
 using GSBT.WinUI.Services;
 
+using GSBT.Core.Common;
 using GSBT.Core.Services;
 using GSBT.WinUI.Common;
 using GSBT.WinUI.ViewModels;
@@ -1128,7 +1129,7 @@ public partial class MainPage : Page
     {
         await ExecuteExclusiveContentDialogAsync(async () =>
         {
-            var catalog = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GSBT", "game_save_data.json");
+            var catalog = UserDataDir.WinUiUserDataFile("game_save_data.json");
 
             string settingsPath;
             try
@@ -1137,7 +1138,7 @@ public partial class MainPage : Page
             }
             catch
             {
-                settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GSBT", "winui_settings.json");
+                settingsPath = UserDataDir.WinUiUserDataFile("winui_settings.json");
             }
 
             var crashLog = AppPaths.WinUiCrashLogPath;

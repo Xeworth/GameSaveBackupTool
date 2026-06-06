@@ -78,7 +78,7 @@ internal static class SandboxBenchmarkFormat
     }
 }
 
-/// <summary>Persists Sandbox monitor → Benchmark tab rows under %AppData%\Roaming\GSBT.</summary>
+/// <summary>Persists Sandbox monitor → Benchmark tab rows under %AppData%\Roaming\GSBT\winui.</summary>
 public sealed class SandboxCompressionBenchmarkStore
 {
     private readonly JsonSerializerOptions _json = new()
@@ -127,7 +127,7 @@ public sealed class SandboxCompressionBenchmarkStore
             () =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                Directory.CreateDirectory(AppPaths.RoamingGsbtRoot);
+                Directory.CreateDirectory(AppPaths.WinUiUserDataRoot);
                 var path = AppPaths.SandboxCompressionBenchmarksPath;
                 var ordered = entries.OrderByDescending(e => e.UtcTicks).Take(200).ToList();
                 var dto = new BenchmarkFileDto { Schema = 1, Entries = ordered };
