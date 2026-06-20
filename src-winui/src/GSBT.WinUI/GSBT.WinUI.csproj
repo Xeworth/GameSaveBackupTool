@@ -20,9 +20,9 @@
         <!-- English-only satellites — drops fr-FR, es-MX, etc. from publish output. -->
         <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
 
-        <!-- Ship Windows App SDK runtime next to the exe so unpackaged `dotnet run` works without a separate Wasdk install. -->
+        <!-- Self-contained .NET + bundled WinApp SDK — reliable unpackaged WinUI install (no separate runtime). -->
         <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
-        <!-- Self-contained Wasdk requires a concrete RID (override when building x86/ARM from VS: win-x86 / win-arm64). -->
+        <!-- Wasdk self-contained publish requires a concrete RID (override when building x86/ARM from VS: win-x86 / win-arm64). -->
         <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
 
         <!-- App Options -->
@@ -84,6 +84,23 @@
         </Content>
         <Content Include="data\ludusavi-save-manifest.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+        <Content Include="..\..\native\win-x64\7z.dll">
+            <Link>7z.dll</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </Content>
+        <Content Include="..\..\assets\video\**\*" Condition="'$(Configuration)' == 'Debug'">
+            <Link>assets\video\%(RecursiveDir)%(Filename)%(Extension)</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+        <Content Include="..\..\assets\audio\**\*" Condition="'$(Configuration)' == 'Debug'">
+            <Link>assets\audio\%(RecursiveDir)%(Filename)%(Extension)</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+        <Content Include="Assets\Fonts\**\*" Condition="Exists('Assets\Fonts')">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
         </Content>
         <Content Include="data\sandbox_simulation\**\*" Condition="'$(IncludeSandboxAssets)' == 'true'">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

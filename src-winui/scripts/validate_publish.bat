@@ -14,12 +14,29 @@ call :require_file "%OUT%\gsbt.exe" "gsbt.exe"
 call :require_file "%OUT%\gsbt.pri" "gsbt.pri"
 call :require_file "%OUT%\Assets\StoreLogo.png" "Assets\StoreLogo.png"
 call :require_file "%OUT%\branding\gsbt.ico" "branding\gsbt.ico"
+call :require_file "%OUT%\gsbt.runtimeconfig.json" "gsbt.runtimeconfig.json"
+call :require_file "%OUT%\coreclr.dll" "coreclr.dll"
 call :require_file "%OUT%\WinRT.Runtime.dll" "WinRT.Runtime.dll"
-call :require_min_size "%OUT%\System.Runtime.InteropServices.dll" 90000 "System.Runtime.InteropServices.dll"
 call :require_min_size "%OUT%\WinRT.Runtime.dll" 500000 "WinRT.Runtime.dll"
+
+if not exist "%OUT%\coreclr.dll" (
+    echo ERROR: Publish is not self-contained ^(missing coreclr.dll^). Set SelfContained=true in win-x64.pubxml.
+    set "ERR=1"
+)
 
 call :require_file "%OUT%\gsbt-sandbox.exe" "gsbt-sandbox.exe"
 call :require_file "%OUT%\gsbt-sandbox.pri" "gsbt-sandbox.pri"
+call :require_file "%OUT%\data\screensaver.7z" "data\screensaver.7z"
+call :require_min_size "%OUT%\data\screensaver.7z" 1000000 "data\screensaver.7z"
+
+if exist "%OUT%\assets\video" (
+    echo ERROR: Loose assets\video should not ship in release publish ^(use data\screensaver.7z^).
+    set "ERR=1"
+)
+if exist "%OUT%\Assets\video" (
+    echo ERROR: Loose Assets\video should not ship in release publish ^(use data\screensaver.7z^).
+    set "ERR=1"
+)
 
 if "%ERR%"=="1" (
     echo.

@@ -110,7 +110,7 @@
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                         TextWrapping="WrapWholeWords"
                         Text="Detail level: Verbose logs everything regardless of toggles. Normal uses the category switches below. Quiet keeps warnings, benchmark steps, and compress summaries (hides noisy scan and progress ticks)." />
-                    <controls:GsbtComboBox
+                    <ComboBox
                         x:Name="LogDetailCombo"
                         Header="Detail level"
                         FontSize="12"

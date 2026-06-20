@@ -2,7 +2,7 @@ using GSBT.Core.Common;
 
 namespace GSBT.WinUI;
 
-/// <summary>WinUI paths under <c>%AppData%\Roaming\GSBT\winui</c>.</summary>
+/// <summary>WinUI paths under <c>%AppData%\Game Save Backup Tool\winui</c>.</summary>
 internal static class AppPaths
 {
     public static string WinUiUserDataRoot => UserDataDir.GetWinUiUserDataDir();
@@ -15,27 +15,25 @@ internal static class AppPaths
     public static string SandboxCompressionBenchmarksPath =>
         Path.Combine(WinUiUserDataRoot, "sandbox_compression_benchmarks.json");
 
-    /// <summary>Migrate crash log from legacy flat GSBT / LocalAppData locations if present.</summary>
+    /// <summary>Migrate crash log from legacy GSBT / LocalAppData locations if present.</summary>
     public static void MigrateLegacyCrashLogIfNeeded()
     {
         try
         {
             Directory.CreateDirectory(LogsDirectory);
+            var roamingLegacy = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                UserDataDir.LegacyAppFolderName);
             var legacyPaths = new[]
             {
                 Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    UserDataDir.GsbtAppName,
+                    UserDataDir.LegacyAppFolderName,
                     "winui_last_error.txt"),
-                Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    UserDataDir.GsbtAppName,
-                    "logs",
-                    "winui_last_error.txt"),
-                Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    UserDataDir.GsbtAppName,
-                    "winui_last_error.txt"),
+                Path.Combine(roamingLegacy, UserDataDir.WinUiSubdir, "logs", "winui_last_error.txt"),
+                Path.Combine(roamingLegacy, "logs", "winui_last_error.txt"),
+                Path.Combine(roamingLegacy, "winui_last_error.txt"),
+                Path.Combine(roamingLegacy, UserDataDir.WinUiSubdir, "winui_last_error.txt"),
             };
 
             foreach (var legacy in legacyPaths)

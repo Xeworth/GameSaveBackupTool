@@ -130,15 +130,29 @@ public partial class MainPage
     {
         if (ViewModel.FooterBackupShowsCancel)
         {
-            BackupButton.Style = (Style)Resources["GsbtToolbarDangerCommandBarButtonStyle"];
-            BackupButton.Content = CreateIconLabelRow(
-                "Cancel", FooterGlyphs.Cancel, FooterIconStyle.Default, out var backupIcon, out var backupLabel);
-            _footerCollapseIcons[8] = backupIcon;
-            _footerCollapseLabels[8] = backupLabel;
+            if (ViewModel.OperationCancelRequested)
+            {
+                BackupButton.Style = (Style)Resources["GsbtCommandBarButtonStyle"];
+                BackupButton.IsEnabled = false;
+                BackupButton.Content = CreateIconLabelRow(
+                    "Canceling", FooterGlyphs.Cancel, FooterIconStyle.Default, out var backupIcon, out var backupLabel);
+                _footerCollapseIcons[8] = backupIcon;
+                _footerCollapseLabels[8] = backupLabel;
+            }
+            else
+            {
+                BackupButton.Style = (Style)Resources["GsbtToolbarDangerCommandBarButtonStyle"];
+                BackupButton.IsEnabled = ViewModel.BackupFooterEnabled;
+                BackupButton.Content = CreateIconLabelRow(
+                    "Cancel", FooterGlyphs.Cancel, FooterIconStyle.Default, out var backupIcon, out var backupLabel);
+                _footerCollapseIcons[8] = backupIcon;
+                _footerCollapseLabels[8] = backupLabel;
+            }
         }
         else
         {
             BackupButton.Style = (Style)Resources["GsbtAccentCommandBarButtonStyle"];
+            BackupButton.IsEnabled = ViewModel.BackupFooterEnabled;
             BackupButton.Content = CreateIconLabelRow(
                 "Backup", FooterGlyphs.Backup, FooterIconStyle.Default, out var backupIcon, out var backupLabel);
             _footerCollapseIcons[8] = backupIcon;
@@ -147,15 +161,29 @@ public partial class MainPage
 
         if (ViewModel.FooterCompressShowsCancel)
         {
-            CompressButton.Style = (Style)Resources["GsbtToolbarDangerCommandBarButtonStyle"];
-            CompressButton.Content = CreateIconLabelRow(
-                "Cancel", FooterGlyphs.Cancel, FooterIconStyle.Default, out var compressIcon, out var compressLabel);
-            _footerCollapseIcons[7] = compressIcon;
-            _footerCollapseLabels[7] = compressLabel;
+            if (ViewModel.OperationCancelRequested)
+            {
+                CompressButton.Style = (Style)Resources["GsbtCommandBarButtonStyle"];
+                CompressButton.IsEnabled = false;
+                CompressButton.Content = CreateIconLabelRow(
+                    "Canceling", FooterGlyphs.Cancel, FooterIconStyle.Default, out var compressIcon, out var compressLabel);
+                _footerCollapseIcons[7] = compressIcon;
+                _footerCollapseLabels[7] = compressLabel;
+            }
+            else
+            {
+                CompressButton.Style = (Style)Resources["GsbtToolbarDangerCommandBarButtonStyle"];
+                CompressButton.IsEnabled = ViewModel.CompressFooterEnabled;
+                CompressButton.Content = CreateIconLabelRow(
+                    "Cancel", FooterGlyphs.Cancel, FooterIconStyle.Default, out var compressIcon, out var compressLabel);
+                _footerCollapseIcons[7] = compressIcon;
+                _footerCollapseLabels[7] = compressLabel;
+            }
         }
         else
         {
             CompressButton.Style = (Style)Resources["GsbtCommandBarButtonStyle"];
+            CompressButton.IsEnabled = ViewModel.CompressFooterEnabled;
             CompressButton.Content = CreateIconLabelRow(
                 "Compress", FooterGlyphs.Compress, FooterIconStyle.Default, out var compressIcon, out var compressLabel);
             _footerCollapseIcons[7] = compressIcon;

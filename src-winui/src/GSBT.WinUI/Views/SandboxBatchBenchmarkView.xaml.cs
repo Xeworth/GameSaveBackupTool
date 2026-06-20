@@ -324,41 +324,56 @@ public sealed partial class SandboxBatchBenchmarkView : UserControl
         header.Children.Add(titleRow);
         header.Children.Add(host.RemoveButton);
 
-        host.Preset = CreatePresetCombo();
-        host.Format = CreateFormatCombo();
-        host.Mx = new NumberBox
+        var mxIndexMax = SevenZipCompressionLevelMapper.SliderIndexCount - 1;
+        host.LevelSlider = new Slider
         {
             Minimum = 0,
-            Maximum = 9,
-            Value = 5,
-            Header = "-mx (7-Zip)",
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
-            MinHeight = RowEditorMinHeight,
-            MinWidth = 120,
-        };
-        host.Threads = new NumberBox
-        {
-            Minimum = 0,
-            Maximum = 128,
-            Value = 0,
-            Header = "-mmt (0=auto)",
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
-            MinHeight = RowEditorMinHeight,
-            MinWidth = 130,
+            Maximum = mxIndexMax,
+            StepFrequency = 1,
+            TickFrequency = 1,
+            TickPlacement = Microsoft.UI.Xaml.Controls.Primitives.TickPlacement.Outside,
+            Value = SevenZipCompressionLevelMapper.SliderIndexFromMx(5),
+            Header = "Compression level (0, 1, 3, 5, 7, 9)",
         };
 
-        host.Preset.SelectionChanged += (_, _) => SyncRowSevenZipUi(host);
+        var threadMax = CompressionOptionsResolver.LogicalProcessorCount;
+        host.ThreadSlider = new Slider
+        {
+            Minimum = 0,
+            Maximum = threadMax,
+            StepFrequency = 1,
+            TickFrequency = 1,
+            TickPlacement = Microsoft.UI.Xaml.Controls.Primitives.TickPlacement.Outside,
+            Value = 0,
+            Header = $"CPU threads (Auto … {threadMax})",
+        };
+        host.ThreadLabel = new TextBlock
+        {
+            Text = "Auto",
+            FontSize = 12,
+            MinWidth = 36,
+            TextAlignment = TextAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = ThemeBridge.GetGsbtBrush(dark, "GsbtBodyTextBrush"),
+        };
+        host.ThreadSlider.ValueChanged += (_, _) =>
+        {
+            var t = (int)Math.Round(host.ThreadSlider.Value);
+            host.ThreadLabel.Text = t <= 0 ? "Auto" : t.ToString();
+        };
+
+        var threadRow = new Grid { ColumnSpacing = 10 };
+        threadRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        threadRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(host.ThreadSlider, 0);
+        Grid.SetColumn(host.ThreadLabel, 1);
+        threadRow.Children.Add(host.ThreadSlider);
+        threadRow.Children.Add(host.ThreadLabel);
 
         var inner = new StackPanel { Spacing = 8 };
         inner.Children.Add(header);
-        inner.Children.Add(host.Preset);
-        inner.Children.Add(
-            new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 10,
-                Children = { host.Format, host.Mx, host.Threads },
-            });
+        inner.Children.Add(host.LevelSlider);
+        inner.Children.Add(threadRow);
         inner.Children.Add(host.StepProgress);
 
         host.RowBorder = new Border
@@ -373,7 +388,6 @@ public sealed partial class SandboxBatchBenchmarkView : UserControl
 
         _batchRows.Add(host);
         BatchRowsPanel.Children.Add(host.RowBorder);
-        SyncRowSevenZipUi(host);
         RelabelBatchRows();
         UpdateRowRemoveStates();
         UpdateAddRowButton();
@@ -445,45 +459,6 @@ public sealed partial class SandboxBatchBenchmarkView : UserControl
         }
     }
 
-    private static ComboBox CreatePresetCombo()
-    {
-        var c = new GsbtComboBox
-        {
-            MinHeight = RowEditorMinHeight,
-            MinWidth = 280,
-            Header = "Engine preset",
-        };
-        c.Items.Add(new ComboBoxItem { Content = "Store (ZIP, no compression)", Tag = CompressionOptionsResolver.PresetStore });
-        c.Items.Add(new ComboBoxItem { Content = "ZIP — fast deflate", Tag = CompressionOptionsResolver.PresetDeflateFast });
-        c.Items.Add(new ComboBoxItem { Content = "ZIP — balanced deflate", Tag = CompressionOptionsResolver.PresetDeflateBalanced });
-        c.Items.Add(new ComboBoxItem { Content = "ZIP — max deflate", Tag = CompressionOptionsResolver.PresetDeflateMax });
-        c.Items.Add(new ComboBoxItem { Content = "7-Zip engine", Tag = CompressionOptionsResolver.PresetSevenZip });
-        c.SelectedIndex = 2;
-        return c;
-    }
-
-    private static ComboBox CreateFormatCombo()
-    {
-        var c = new GsbtComboBox
-        {
-            MinHeight = RowEditorMinHeight,
-            MinWidth = 200,
-            Header = "7-Zip output",
-        };
-        c.Items.Add(new ComboBoxItem { Content = ".7z (LZMA2)", Tag = "7z" });
-        c.Items.Add(new ComboBoxItem { Content = ".zip (Deflate via 7z)", Tag = "zip" });
-        c.SelectedIndex = 0;
-        return c;
-    }
-
-    private static void SyncRowSevenZipUi(BatchRowHost h)
-    {
-        var is7 = (h.Preset.SelectedItem as ComboBoxItem)?.Tag as string == CompressionOptionsResolver.PresetSevenZip;
-        h.Format.IsEnabled = is7;
-        h.Mx.IsEnabled = is7;
-        h.Threads.IsEnabled = is7;
-    }
-
     private async void RunBatchButton_Click(object sender, RoutedEventArgs e)
     {
         if (!CanRun() || _batchRunning)
@@ -493,19 +468,15 @@ public sealed partial class SandboxBatchBenchmarkView : UserControl
         }
 
         var backup = _vm.GetEffectiveBackupRootForCompressPrompt()!;
-        var sevenPathSetting = _settings.Get("compression_7z_path", string.Empty) ?? string.Empty;
         var specs = new List<BatchTestBeginSpec>();
         foreach (var h in _batchRows)
         {
-            var preset = (h.Preset.SelectedItem as ComboBoxItem)?.Tag as string ?? CompressionOptionsResolver.PresetDeflateBalanced;
-            var fmt = (h.Format.SelectedItem as ComboBoxItem)?.Tag as string ?? "7z";
+            var mx = SevenZipCompressionLevelMapper.MxFromSliderIndex((int)Math.Round(h.LevelSlider.Value));
+            var threads = CompressionOptionsResolver.NormalizeThreadCount(
+                (int)Math.Round(h.ThreadSlider.Value),
+                CompressionOptionsResolver.LogicalProcessorCount);
             var name = string.IsNullOrEmpty(h.CustomName) ? null : h.CustomName;
-            specs.Add(new BatchTestBeginSpec(
-                CompressionOptionsResolver.NormalizePreset(preset),
-                CompressionOptionsResolver.Normalize7zFormat(fmt),
-                (int)Math.Clamp(h.Mx.Value, 0, 9),
-                (int)Math.Clamp(h.Threads.Value, 0, 128),
-                name));
+            specs.Add(new BatchTestBeginSpec(mx, threads, name));
         }
 
         _batchCts = new CancellationTokenSource();
@@ -530,19 +501,18 @@ public sealed partial class SandboxBatchBenchmarkView : UserControl
                 token.ThrowIfCancellationRequested();
                 PrepareRowForActiveStep(i);
                 var step = specs[i];
-                var preset = step.Preset;
-                var fmt = step.Format;
                 var mx = step.Mx;
                 var threads = step.Threads;
                 var rowHost = _batchRows[i];
                 _batchPerfHub.SetStepRunning(i);
                 var checkpointLabel = BatchTestDisplayName.TruncateForCheckpoint(
                     BatchTestDisplayName.Resolve(rowHost.CustomName, i));
-                var paramLine = BatchTestParameterFormatter.BuildCompact(preset, fmt, mx, threads);
+                var paramLine = BatchTestParameterFormatter.BuildCompact(mx, threads);
                 _resourceMonitor.NotifyBatchStepStarting(i, checkpointLabel, paramLine);
                 StatusText.Text = $"Batch step {i + 1} of {specs.Count}…";
-                _log.Log("benchmark", $"Batch {i + 1}/{specs.Count}: preset={preset} format={fmt} -mx={mx} -mmt={threads}");
-                var opts = CompressionOptionsResolver.FromExplicit(preset, fmt, mx, threads, sevenPathSetting);
+                var mmtLog = threads <= 0 ? "Auto" : threads.ToString();
+                _log.Log("benchmark", $"Batch {i + 1}/{specs.Count}: -mx={mx} -mmt={mmtLog} (native .7z)");
+                var opts = CompressionOptionsResolver.FromExplicit(mx, threads);
                 var progress = new Progress<int>(pct =>
                 {
                     var p = Math.Clamp(pct, 0, 100);
@@ -565,7 +535,8 @@ public sealed partial class SandboxBatchBenchmarkView : UserControl
                                         progress,
                                         m => _log.Log("compress", m),
                                         folder => _compressionActivity.SetCurrentGameFolder(folder),
-                                        token)
+                                        reportGameTrack: null,
+                                        cancellationToken: token)
                                     .ConfigureAwait(false))
                         .ConfigureAwait(true);
                 }
@@ -640,10 +611,9 @@ public sealed partial class SandboxBatchBenchmarkView : UserControl
         public Button RenameButton { get; set; } = null!;
         public string? CustomName { get; set; }
         public Button RemoveButton { get; set; } = null!;
-        public ComboBox Preset { get; set; } = null!;
-        public ComboBox Format { get; set; } = null!;
-        public NumberBox Mx { get; set; } = null!;
-        public NumberBox Threads { get; set; } = null!;
+        public Slider LevelSlider { get; set; } = null!;
+        public Slider ThreadSlider { get; set; } = null!;
+        public TextBlock ThreadLabel { get; set; } = null!;
         public ProgressBar StepProgress { get; set; } = null!;
         public Border RowBorder { get; set; } = null!;
         public CancellationTokenSource? ProgressHoldCts { get; set; }

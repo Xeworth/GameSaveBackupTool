@@ -227,6 +227,7 @@ public partial class MainPage : Page
         }
 
         InitializeBottomOverlayLayers();
+        InitializeCompressionScreenSaver();
         SyncBackupIntegrityStripUi();
         ConfigureScanMenuForSimulation();
 
@@ -237,6 +238,8 @@ public partial class MainPage : Page
 
         MonitorCommandButton.Visibility =
             App.LaunchSandboxMonitor && !App.IsSandboxSimulationChild ? Visibility.Visible : Visibility.Collapsed;
+
+        ApplySandboxDiagnosticsChrome();
 
         RequestFooterCommandBarOverflowRelayout();
 
@@ -428,6 +431,7 @@ public partial class MainPage : Page
 
         CancelProgressHideTimer();
         await CleanupStatusToastOnUnloadAsync();
+        DisposeCompressionScreenSaver();
 
         FooterCommandRow.SizeChanged -= FooterCommandRow_SizeChanged;
 
@@ -558,7 +562,9 @@ public partial class MainPage : Page
         }
 
         if (e.PropertyName is nameof(MainViewModel.FooterBackupShowsCancel)
-            or nameof(MainViewModel.FooterCompressShowsCancel))
+            or nameof(MainViewModel.FooterCompressShowsCancel)
+            or nameof(MainViewModel.OperationCancelRequested)
+            or nameof(MainViewModel.CanCancelOperation))
 
         {
 
@@ -566,10 +572,16 @@ public partial class MainPage : Page
 
         }
 
+        if (e.PropertyName is nameof(MainViewModel.OperationCancelRequested))
+        {
+            SyncCompressionScreenSaverCancelStatus();
+        }
+
         if (e.PropertyName is nameof(MainViewModel.ScanProgress)
             or nameof(MainViewModel.IsBusy)
             or nameof(MainViewModel.FooterBackupShowsCancel)
-            or nameof(MainViewModel.FooterCompressShowsCancel))
+            or nameof(MainViewModel.FooterCompressShowsCancel)
+            or nameof(MainViewModel.OperationCancelRequested))
 
         {
 
@@ -1109,10 +1121,32 @@ public partial class MainPage : Page
 
 
 
-    private async void Diagnostics_Click(object sender, RoutedEventArgs e) => await ShowDiagnosticsAsync();
+    private static bool IsSandboxDiagnosticsAvailable =>
+        App.LaunchSandboxMonitor && !App.IsSandboxSimulationChild;
+
+    private void ApplySandboxDiagnosticsChrome()
+    {
+        var visible = IsSandboxDiagnosticsAvailable ? Visibility.Visible : Visibility.Collapsed;
+        DiagnosticsMenuItem.Visibility = visible;
+    }
+
+    private async void Diagnostics_Click(object sender, RoutedEventArgs e)
+    {
+        if (!IsSandboxDiagnosticsAvailable)
+        {
+            return;
+        }
+
+        await ShowDiagnosticsAsync();
+    }
 
     private void DiagnosticsShortcut_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
+        if (!IsSandboxDiagnosticsAvailable)
+        {
+            return;
+        }
+
         args.Handled = true;
         _ = ShowDiagnosticsAsync();
     }
@@ -1577,7 +1611,10 @@ public partial class MainPage : Page
         Line("F1", "open Shortcuts (this panel)");
         Line("F2", "open Settings");
         Line("F11", "open About");
-        Line("F12", "open Diagnostics");
+        if (IsSandboxDiagnosticsAvailable)
+        {
+            Line("F12", "open Diagnostics");
+        }
         Line("Ctrl+click", "add or remove a row from the selection");
         Line("Shift+click", "select a contiguous range from the anchor row");
         Line("Arrow keys", "move row focus; Shift+arrows extend selection");
@@ -1955,11 +1992,41 @@ public partial class MainPage : Page
 
     private void MainWindow_SizeChanged(object sender, WindowSizeChangedEventArgs e)
     {
-        if (_suppressMainWindowResizePersist)
+        if (App.MainWindowRef is not Window window
+            || WindowSizeHelper.IsWindowIconic(window)
+            || !WindowSizeHelper.TryGetClientSize(window, out var ww, out var hh))
+        {
+            if (ShouldSuppressMainWindowResizePersist)
+            {
+                return;
+            }
+
+            ScheduleMainWindowResizePersist();
+            return;
+        }
+
+        try
+        {
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            WindowFrameMetrics.NoteVisibleWindow(hwnd);
+        }
+        catch
+        {
+            // ignore
+        }
+
+        _screenSaverWindowResize.NoteVisibleLayoutMetrics(MainContentArea, ww, hh);
+
+        if (ShouldSuppressMainWindowResizePersist)
         {
             return;
         }
 
+        ScheduleMainWindowResizePersist();
+    }
+
+    private void ScheduleMainWindowResizePersist()
+    {
         _mainWindowResizePersistTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
         _mainWindowResizePersistTimer.Stop();
         _mainWindowResizePersistTimer.Tick -= MainWindowResizePersistTimer_Tick;
@@ -1967,15 +2034,22 @@ public partial class MainPage : Page
         _mainWindowResizePersistTimer.Start();
     }
 
-    private void MainWindowResizePersistTimer_Tick(object? sender, object e)
+    private void CancelMainWindowResizePersistTimer()
     {
-        if (_mainWindowResizePersistTimer is not null)
+        if (_mainWindowResizePersistTimer is null)
         {
-            _mainWindowResizePersistTimer.Stop();
-            _mainWindowResizePersistTimer.Tick -= MainWindowResizePersistTimer_Tick;
+            return;
         }
 
-        if (_suppressMainWindowResizePersist)
+        _mainWindowResizePersistTimer.Stop();
+        _mainWindowResizePersistTimer.Tick -= MainWindowResizePersistTimer_Tick;
+    }
+
+    private void MainWindowResizePersistTimer_Tick(object? sender, object e)
+    {
+        CancelMainWindowResizePersistTimer();
+
+        if (ShouldSuppressMainWindowResizePersist)
         {
             return;
         }

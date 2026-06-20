@@ -45,6 +45,8 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly RegistrySaveBackupService _registryBackup = new();
     private readonly BackupCompressionService _compression = new();
     private readonly CompressionActivityTracker _compressionActivity;
+
+    internal CompressionActivityTracker CompressionActivity => _compressionActivity;
     private readonly DispatcherQueue _dispatcher;
     private readonly DefaultBackupIntegrityCoordinator _backupIntegrityCoordinator;
     private DispatcherQueueTimer? _simulationBackupIntegrityPollTimer;
@@ -104,6 +106,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private CancellationTokenSource? _operationCts;
     private FooterCancelSlot _footerCancelSlot;
+    private bool _operationCancelRequested;
 
     /// <summary>Footer Backup / Compress ÔÇö disabled while backup/compress holds <see cref="IsBusy"/> (except Cancel morph).</summary>
     public bool CanBackupOrCompressFooter => CanUseBackupAndCompress && !IsBusy;
@@ -123,8 +126,11 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Scan, settings, tools, etc. ÔÇö disabled during backup/compress.</summary>
     public bool CanUseFooterCommands => !IsBusy;
 
-    /// <summary>In-flight backup/compress ÔÇö Escape and footer Cancel.</summary>
-    public bool CanCancelOperation => _operationCts is not null && IsBusy;
+    /// <summary>User pressed Cancel; work is stopping (footer shows greyed Canceling).</summary>
+    public bool OperationCancelRequested => _operationCancelRequested;
+
+    /// <summary>In-flight backup/compress — Escape and footer Cancel.</summary>
+    public bool CanCancelOperation => _operationCts is not null && IsBusy && !_operationCancelRequested;
 
     partial void OnIsBusyChanged(bool value)
     {
@@ -135,19 +141,56 @@ public sealed partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(FooterCompressShowsCancel));
         OnPropertyChanged(nameof(BackupFooterEnabled));
         OnPropertyChanged(nameof(CompressFooterEnabled));
+        OnPropertyChanged(nameof(OperationCancelRequested));
     }
 
-    /// <summary>Cancels in-flight backup or compress (no-op if idle).</summary>
+    /// <summary>Cancels in-flight backup or compress (no-op if idle or already canceling).</summary>
     public void CancelOperation()
     {
+        if (_operationCts is null || !IsBusy || _operationCancelRequested)
+        {
+            return;
+        }
+
+        _operationCancelRequested = true;
+        OnPropertyChanged(nameof(OperationCancelRequested));
+        OnPropertyChanged(nameof(CanCancelOperation));
         try
         {
-            _operationCts?.Cancel();
+            _operationCts.Cancel();
         }
         catch
         {
             // ignore
         }
+    }
+
+    private void BeginCancellableOperation(FooterCancelSlot slot)
+    {
+        _operationCancelRequested = false;
+        _footerCancelSlot = slot;
+        _operationCts = new CancellationTokenSource();
+        IsBusy = true;
+        OnPropertyChanged(nameof(OperationCancelRequested));
+        OnPropertyChanged(nameof(CanCancelOperation));
+        OnPropertyChanged(nameof(FooterBackupShowsCancel));
+        OnPropertyChanged(nameof(FooterCompressShowsCancel));
+        OnPropertyChanged(nameof(BackupFooterEnabled));
+        OnPropertyChanged(nameof(CompressFooterEnabled));
+    }
+
+    private void EndCancellableOperation()
+    {
+        _footerCancelSlot = FooterCancelSlot.None;
+        _operationCancelRequested = false;
+        _operationCts?.Dispose();
+        _operationCts = null;
+        OnPropertyChanged(nameof(OperationCancelRequested));
+        OnPropertyChanged(nameof(CanCancelOperation));
+        OnPropertyChanged(nameof(FooterBackupShowsCancel));
+        OnPropertyChanged(nameof(FooterCompressShowsCancel));
+        OnPropertyChanged(nameof(BackupFooterEnabled));
+        OnPropertyChanged(nameof(CompressFooterEnabled));
     }
 
     public SandboxLogHub SandboxLog => _sandboxLog;
@@ -352,7 +395,6 @@ public sealed partial class MainViewModel : ObservableObject
         "backup_bulk_teaching_tip_shown",
         "compress_teaching_tip_shown",
         "onboarding_scan_add_tip_shown",
-        "settings_compression_7zip_engine_tip_shown",
         "settings_after_compress_pointer_tip_shown",
     ];
 
@@ -421,19 +463,6 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     public bool ShouldShowCompressTeachingTip() => !IsTeachingTipMarkedShown("compress_teaching_tip_shown");
-
-    /// <summary>Settings ÔåÆ Compression one-time tip (always persisted; not tied to sandbox ÔÇ£first launchÔÇØ override).</summary>
-    public bool ShouldShowCompressionSevenZipEngineTip() =>
-        !_settings.Get("settings_compression_7zip_engine_tip_shown", false);
-
-    public void MarkCompressionSevenZipEngineTipDismissed() =>
-        _settings.Set("settings_compression_7zip_engine_tip_shown", true);
-
-    /// <summary>Short subtitle for the Settings footer Compression tab teaching tip (preset only).</summary>
-    public string CompressionSevenZipEngineTeachingTipIntro =>
-        App.IsSandboxSimulationChild
-            ? "Pick the 7-Zip engine above for smaller archives. Get 7-Zip is disabled in this simulation window."
-            : "Pick the 7-Zip engine above for smaller, faster backups.";
 
     /// <summary>Shown once after the footer ÔÇ£Compress your backupsÔÇØ teaching tip is dismissed.</summary>
     public bool ShouldShowSettingsAfterCompressTeachingTip() =>

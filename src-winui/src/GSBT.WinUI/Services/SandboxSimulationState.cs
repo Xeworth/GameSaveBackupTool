@@ -106,6 +106,9 @@ public sealed class SandboxSimulationState : ISandboxRuntimeOverrides
         }
     }
 
+    /// <summary>0 = rotate; 1 or 2 = force a screen saver asset in sandbox preview.</summary>
+    public int ScreenSaverPreviewAssetId { get; set; }
+
     /// <summary>Apply values written by the parent process before launching the simulated child.</summary>
     public void ApplyLaunchSnapshot(SimulationLaunchFlags flags)
     {

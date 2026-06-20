@@ -17,9 +17,6 @@ public static class UiMetrics
     /// <summary>Toolbar / footer control strip height target (SplitButton, DropDownButton, Button).</summary>
     public const double CommandBarButtonMinHeight = 28;
 
-    /// <summary>Settings MenuFlyout pickers: DefaultButtonStyle border needs a few px above toolbar height.</summary>
-    public const double SettingsDropdownMinHeight = 32;
-
     /// <summary>Inset from window edge to the main footer toolbar content (status + buttons).</summary>
     public const double CommandBarInset = 10;
 

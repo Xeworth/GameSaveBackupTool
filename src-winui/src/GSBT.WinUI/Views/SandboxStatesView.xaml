@@ -73,15 +73,16 @@
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                         TextWrapping="WrapWholeWords"
                         Text="Overrides whether Settings → Compression reports 7-Zip as installed or not. Backup compression still uses a real 7z.exe when one exists; choosing Not installed surfaces Get 7-Zip like a normal machine without 7-Zip." />
-                    <controls:GsbtComboBox
+                    <ComboBox
                         x:Name="SevenZipUiModeCombo"
                         MinWidth="280"
                         HorizontalAlignment="Left"
+                        FontSize="12"
                         SelectionChanged="SevenZipUiModeCombo_SelectionChanged">
                         <ComboBoxItem Content="Follow real install on disk (default)" Tag="auto" />
                         <ComboBoxItem Content="Simulate: 7-Zip is installed" Tag="present" />
                         <ComboBoxItem Content="Simulate: 7-Zip is not installed" Tag="absent" />
-                    </controls:GsbtComboBox>
+                    </ComboBox>
                 </StackPanel>
             </Border>
 
@@ -165,6 +166,52 @@
                             Click="PreviewRedButton_Click"
                             AccessKey="R"
                             ToolTipService.ToolTip="Drives the simulated window: red Last backup + same toast as when backups disappear under the default path (clears last backup in catalog for one row). Alt+R." />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border
+                Padding="12,10"
+                CornerRadius="8"
+                BorderBrush="{ThemeResource GsbtBorderBrush}"
+                BorderThickness="1"
+                Background="{ThemeResource GsbtCardBgBrush}">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Compression screen saver (main window)" FontWeight="SemiBold" FontSize="13" />
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        TextWrapping="WrapWholeWords"
+                        Text="Preview the compress screen saver on the real main window, or run a fake slow compress that triggers the screen saver after 5 seconds (no need to wait the real 60s). Exit and Mute only affect the screen saver; compression keeps running. Tab / Shift+Tab; Space or Enter activates the focused button." />
+                    <ComboBox
+                        x:Name="ScreenSaverAssetCombo"
+                        MinWidth="280"
+                        HorizontalAlignment="Left"
+                        FontSize="12"
+                        SelectionChanged="ScreenSaverAssetCombo_SelectionChanged">
+                        <ComboBoxItem Content="Rotate (round-robin)" Tag="0" />
+                        <ComboBoxItem Content="Screen saver ID1" Tag="1" />
+                        <ComboBoxItem Content="Screen saver ID2" Tag="2" />
+                        <ComboBoxItem Content="Screen saver ID3" Tag="3" />
+                        <ComboBoxItem Content="Screen saver ID4" Tag="4" />
+                    </ComboBox>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button
+                            x:Name="PreviewScreenSaverButton"
+                            MinHeight="32"
+                            Padding="12,8"
+                            Content="Preview screen saver"
+                            Click="PreviewScreenSaverButton_Click"
+                            AccessKey="V"
+                            ToolTipService.ToolTip="Shows the compression screen saver on the main GSBT window immediately. Alt+V." />
+                        <Button
+                            x:Name="SimulateSlowCompressButton"
+                            MinHeight="32"
+                            Padding="12,8"
+                            Content="Simulate slow compress (5s trigger)"
+                            Click="SimulateSlowCompressButton_Click"
+                            AccessKey="C"
+                            ToolTipService.ToolTip="Runs fake compress progress on the main window; screen saver triggers after 5 seconds. Alt+C." />
                     </StackPanel>
                 </StackPanel>
             </Border>

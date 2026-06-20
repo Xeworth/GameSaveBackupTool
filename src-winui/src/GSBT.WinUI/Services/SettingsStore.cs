@@ -4,7 +4,7 @@ using GSBT.Core.Common;
 namespace GSBT.WinUI.Services;
 
 /// <summary>
-/// Persists UI settings under <c>%AppData%\Roaming\GSBT\winui\winui_settings.json</c>.
+/// Persists UI settings under <c>%AppData%\Game Save Backup Tool\winui\winui_settings.json</c>.
 /// Unpackaged WinUI apps cannot use <see cref="Windows.Storage.ApplicationData.Current"/> without package identity.
 /// </summary>
 public sealed class SettingsStore
@@ -90,11 +90,26 @@ public sealed class SettingsStore
                 return;
             }
 
-            var legacyDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GSBT");
-            var legacySettings = Path.Combine(legacyDir, "winui_settings.json");
-            if (File.Exists(legacySettings))
+            var legacySettingsPaths = new[]
             {
-                File.Copy(legacySettings, _path, overwrite: false);
+                Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    UserDataDir.LegacyAppFolderName,
+                    "winui_settings.json"),
+                Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    UserDataDir.LegacyAppFolderName,
+                    UserDataDir.WinUiSubdir,
+                    "winui_settings.json"),
+            };
+
+            foreach (var legacySettings in legacySettingsPaths)
+            {
+                if (File.Exists(legacySettings))
+                {
+                    File.Copy(legacySettings, _path, overwrite: false);
+                    break;
+                }
             }
         }
         catch

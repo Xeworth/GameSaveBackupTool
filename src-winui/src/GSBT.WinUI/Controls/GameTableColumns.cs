@@ -1,3 +1,5 @@
+using GSBT.Core.Services;
+
 namespace GSBT.WinUI.Controls;
 
 /// <summary>
@@ -63,20 +65,14 @@ public static class GameTableColumns
         }
     ];
 
-    /// <summary>Hides legacy/catalog placeholders so the column shows store/source names only (Steam, GOG, PC, …).</summary>
+    /// <summary>Store names as detected; disk/unknown installs show as <see cref="GamePlatformHeuristics.OtherLabel"/>.</summary>
     private static string FormatPlatformCell(string? platform)
     {
-        if (string.IsNullOrWhiteSpace(platform))
+        if (string.Equals(platform, "Cached", StringComparison.OrdinalIgnoreCase))
         {
             return string.Empty;
         }
 
-        if (string.Equals(platform, "Cached", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(platform, "Unknown", StringComparison.OrdinalIgnoreCase))
-        {
-            return string.Empty;
-        }
-
-        return platform;
+        return GamePlatformHeuristics.FormatForDisplay(platform);
     }
 }

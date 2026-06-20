@@ -1,5 +1,6 @@
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using System.Runtime.InteropServices;
 using WinRT.Interop;
 using WinUIEx;
 using Windows.Graphics;
@@ -59,6 +60,35 @@ public static class WindowSizeHelper
             width = s.Width;
             height = s.Height;
             return width > 0 && height > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Restore-size client pixels: live <see cref="AppWindow"/> when visible,
+    /// otherwise <c>WINDOWPLACEMENT.rcNormalPosition</c> minus measured frame insets.
+    /// </summary>
+    public static bool TryGetNormalClientSize(Window window, out int width, out int height)
+    {
+        width = 0;
+        height = 0;
+        try
+        {
+            var hwnd = WindowNative.GetWindowHandle(window);
+            if (hwnd == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            if (!NativeMethods.IsIconic(hwnd))
+            {
+                return TryGetClientSize(window, out width, out height);
+            }
+
+            return NativeMethods.TryGetNormalClientSizeFromPlacement(hwnd, out width, out height);
         }
         catch
         {
@@ -163,14 +193,33 @@ public static class WindowSizeHelper
         }
     }
 
+    public static bool IsWindowIconic(Window window)
+    {
+        try
+        {
+            var hwnd = WindowNative.GetWindowHandle(window);
+            return hwnd != IntPtr.Zero && NativeMethods.IsIconic(hwnd);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public static void SetClientSize(Window window, int width, int height)
     {
         try
         {
             var hwnd = WindowNative.GetWindowHandle(window);
+            WindowFrameMetrics.NoteVisibleWindow(hwnd);
             var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
             var appWindow = AppWindow.GetFromWindowId(windowId);
             appWindow.Resize(new SizeInt32(width, height));
+
+            if (NativeMethods.IsIconic(hwnd))
+            {
+                NativeMethods.TryUpdateMinimizedRestoreBounds(hwnd, width, height);
+            }
         }
         catch
         {
@@ -214,6 +263,91 @@ public static class WindowSizeHelper
         catch
         {
             // ignore minimum-size failures on unsupported hosts
+        }
+    }
+
+    private static class NativeMethods
+    {
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool IsIconic(IntPtr hWnd);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetWindowPlacement(IntPtr hWnd, ref WindowPlacement lpwndpl);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetWindowPlacement(IntPtr hWnd, ref WindowPlacement lpwndpl);
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowLong")]
+        private static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
+        private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
+
+        internal static bool TryGetNormalClientSizeFromPlacement(IntPtr hwnd, out int width, out int height)
+        {
+            width = 0;
+            height = 0;
+            var placement = new WindowPlacement { length = Marshal.SizeOf<WindowPlacement>() };
+            if (!GetWindowPlacement(hwnd, ref placement))
+            {
+                return false;
+            }
+
+            var (frameW, frameH) = WindowFrameMetrics.FrameInsets;
+            width = (placement.rcNormalPosition.Right - placement.rcNormalPosition.Left) - frameW;
+            height = (placement.rcNormalPosition.Bottom - placement.rcNormalPosition.Top) - frameH;
+            return width > 0 && height > 0;
+        }
+
+        internal static bool TryUpdateMinimizedRestoreBounds(IntPtr hwnd, int clientWidth, int clientHeight)
+        {
+            var placement = new WindowPlacement { length = Marshal.SizeOf<WindowPlacement>() };
+            if (!GetWindowPlacement(hwnd, ref placement))
+            {
+                return false;
+            }
+
+            var showCmd = placement.showCmd;
+            var (frameW, frameH) = WindowFrameMetrics.FrameInsets;
+            placement.rcNormalPosition.Right = placement.rcNormalPosition.Left + clientWidth + frameW;
+            placement.rcNormalPosition.Bottom = placement.rcNormalPosition.Top + clientHeight + frameH;
+            placement.showCmd = showCmd;
+            return SetWindowPlacement(hwnd, ref placement);
+        }
+
+        private static int GetWindowLong(IntPtr hwnd, int index) =>
+            IntPtr.Size == 8
+                ? (int)GetWindowLongPtr64(hwnd, index)
+                : GetWindowLong32(hwnd, index);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct Rect
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct WindowPlacement
+        {
+            public int length;
+            public int flags;
+            public int showCmd;
+            public Point ptMinPosition;
+            public Point ptMaxPosition;
+            public Rect rcNormalPosition;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct Point
+        {
+            public int X;
+            public int Y;
         }
     }
 }

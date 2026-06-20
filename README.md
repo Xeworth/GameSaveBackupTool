@@ -18,7 +18,7 @@ These features are shared across GSBT editions (different UI “flavours,” sam
 - **Catalog** — persist your game list; add or rename entries manually
 - **Backup** one game or many; timestamped folders with **retention** (keep N backups)
 - **Registry saves** — export configured registry subtrees as `.reg` in your backup folder
-- **Compress** backup roots (built-in ZIP and/or **7-Zip** when available)
+- **Compress** backup roots (built-in ZIP and native **`.7z`** via bundled `7z.dll`)
 - **Auto-backup** when save files change (where the platform supports file watching)
 - **Integrity hints** — warnings when on-disk backups drift from the catalog
 - **Settings** — backup folder, compression options, filters, notifications (edition-dependent UI)
@@ -45,7 +45,7 @@ launch.bat
 
 Build, test, publish, and installer steps: [src-winui/README.md](src-winui/README.md).
 
-**Requirements:** Windows 10 1809+ · 64-bit recommended · self-contained publish is typically **~150–250 MB** (Windows App SDK + .NET bundled).
+**Requirements:** Windows 10 1809+ · 64-bit recommended · **self-contained** installer/portable (no separate .NET install) · per-user install in `%LocalAppData%` · unpacked app ~180–220 MB.
 
 **First release builds are unsigned** — Windows SmartScreen may warn until the file gains reputation. See [PRIVACY.md](PRIVACY.md) for what the app touches on your PC.
 
@@ -54,6 +54,7 @@ Build, test, publish, and installer steps: [src-winui/README.md](src-winui/READM
 | Document | Description |
 |----------|-------------|
 | [PRIVACY.md](PRIVACY.md) | Local data and network use |
+| [THIRD_PARTY.md](THIRD_PARTY.md) | Bundled `7z.dll`, SharpSevenZip, and other attributions |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Issues and pull requests |
 | [docs/winui/CODEBASE_OVERVIEW.md](docs/winui/CODEBASE_OVERVIEW.md) | Architecture notes and pulse check (optional) |
@@ -65,3 +66,5 @@ Contributor engineering checklists live under [docs/winui/dev/](docs/winui/dev/)
 ## License
 
 [MIT](LICENSE) — Copyright © 2026 Xeworth
+
+Third-party libraries (including bundled **7-Zip** / `7z.dll`) are listed in [THIRD_PARTY.md](THIRD_PARTY.md).

@@ -67,7 +67,7 @@ echo Done. Portable package:
 echo   %ZIP%
 echo   ~!ZIP_MB! MB zip
 echo.
-echo Extract anywhere and run gsbt.exe. Settings go to %%AppData%%\GSBT as usual.
+echo Extract anywhere and run gsbt.exe. Settings go to %%AppData%%\Game Save Backup Tool as usual.
 echo.
 exit /b 0
 

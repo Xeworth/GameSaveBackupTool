@@ -78,7 +78,7 @@ public sealed class SandboxBatchPerformanceHub
             {
                 Index = i,
                 Title = BatchTestDisplayName.Resolve(s.DisplayName, i),
-                ParametersLine = BatchTestParameterFormatter.BuildCompact(s.Preset, s.Format, s.Mx, s.Threads),
+                ParametersLine = BatchTestParameterFormatter.BuildCompact(s.Mx, s.Threads),
                 Phase = BatchTestRunPhase.Queued,
                 ProgressPercent = 0,
             }).ToList();
@@ -198,9 +198,4 @@ public sealed class SandboxBatchPerformanceHub
     private void RaiseChanged() => StateChanged?.Invoke();
 }
 
-public readonly record struct BatchTestBeginSpec(
-    string Preset,
-    string Format,
-    int Mx,
-    int Threads,
-    string? DisplayName);
+public readonly record struct BatchTestBeginSpec(int Mx, int Threads, string? DisplayName);

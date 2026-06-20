@@ -1,6 +1,6 @@
 # GSBT Native — Windows (WinUI 3)
 
-C# / .NET 8 edition: scan game saves, backup with retention, compress (ZIP / 7-Zip), tray, auto-backup.
+C# / .NET 8 edition: scan game saves, backup with retention, compress (ZIP / bundled `.7z`), tray, auto-backup.
 
 ## Requirements
 
@@ -45,7 +45,7 @@ scripts\clean.bat
 
 ## Release publish
 
-Self-contained `win-x64` output for smoke tests and the installer (`PublishTrimmed` is **off** — a trimmed build warns with IL2026 and often breaks settings/catalog/WinUI at runtime).
+Self-contained `win-x64` output for smoke tests, installer, and portable zip. `PublishTrimmed` is **off** — trimmed builds break settings/catalog/WinUI at runtime.
 
 From `src-winui/`:
 
@@ -61,7 +61,9 @@ dotnet publish src\GSBT.WinUI\GSBT.WinUI.csproj -c Release -r win-x64 -p:Platfor
 
 Output: `src\GSBT.WinUI\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\`
 
-`publish_release.bat` wipes stale `publish\` output, copies `Assets\` beside `gsbt.exe`, strips non-English locale folders, and runs `validate_publish.bat`. Run the published app before packaging:
+`publish_release.bat` wipes stale `publish\`, packs screen saver media into `data\screensaver.7z`, strips non-English locale folders, copies WinUI `Assets\`, and runs `validate_publish.bat`. Debug builds still use loose `assets\video` and `assets\audio` beside the exe.
+
+Run the published app before packaging:
 
 ```bat
 src\GSBT.WinUI\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\gsbt.exe
@@ -69,16 +71,22 @@ src\GSBT.WinUI\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\gsbt.exe
 
 ## Installer (`GSBT_Setup_*.exe`)
 
-Prerequisites: successful `publish_release.bat` run **and** Inno Setup **6.5.4+** (system light/dark wizard).
+Prerequisites: successful `publish_release.bat` and Inno Setup **6.5.4+**.
 
 From `src-winui/`:
+
+```bat
+scripts\package_release.bat
+```
+
+Or:
 
 ```bat
 scripts\publish_release.bat
 installer\build_installer.bat
 ```
 
-Output: `installer\output\GSBT_Setup_0.0.2.260606.exe` (version from `installer\GSBT_Setup.iss` — keep in sync with `AppAboutInfo.VersionDisplay`).
+Installs per-user to `%LocalAppData%\Game Save Backup Tool\` (no admin). Output: `installer\output\GSBT_Setup_*.exe` (version from `GSBT_Setup.iss` — sync with `AppAboutInfo.VersionDisplay`).
 
 Override Inno path if needed:
 
@@ -91,7 +99,7 @@ Full installer options, QA steps, and layout: [installer/README.md](installer/RE
 
 ## Portable zip
 
-Yes — a **portable** build is possible. Release publish is already **self-contained** (`.NET 8` + Windows App SDK bundled in the folder). Portable means: zip that folder, user extracts and runs `gsbt.exe`. No Python-style single file, but no separate runtime install either.
+Yes — a **portable** zip is supported. Release publish is **self-contained** (`.NET 8` and Windows App SDK bundled in the folder). Extract and run `gsbt.exe`; no installer or runtime prerequisite.
 
 From `src-winui/` (after `publish_release.bat`):
 
@@ -99,7 +107,7 @@ From `src-winui/` (after `publish_release.bat`):
 scripts\package_portable.bat
 ```
 
-Output: `installer\output\GSBT_Portable_0.0.2.260606.zip`
+Output: `installer\output\GSBT_Portable_<version>.zip`
 
 Or build **all** release assets in one go:
 
@@ -109,30 +117,26 @@ scripts\package_release.bat
 
 That produces both the portable zip and the installer exe under `installer\output\` (gitignored).
 
-## GitHub Releases (three “versions”)
+## GitHub Releases
 
 | What users get | How it ships |
 |----------------|--------------|
-| **Source** | The repo itself — GitHub auto-attaches `Source code (zip/tar.gz)` to every release tag |
-| **Portable** | Upload `GSBT_Portable_*.zip` from `installer\output\` |
-| **Installer** | Upload `GSBT_Setup_*.exe` from `installer\output\` |
+| **Source** | GitHub auto-attaches `Source code (zip/tar.gz)` to every release tag |
+| **Portable** | `GSBT_Portable_*.zip` from `installer\output\` |
+| **Installer** | `GSBT_Setup_*.exe` from `installer\output\` |
 
 Typical flow:
 
 1. Bump version in `AppAboutInfo.VersionDisplay` and `installer\GSBT_Setup.iss`
 2. `scripts\package_release.bat`
-3. Create a GitHub Release (tag e.g. `v0.0.2.260606`) and attach the two binaries
-
-Web UI: repo → **Releases** → **Draft a new release** → pick tag → drag files into **Attach binaries**.
-
-CLI (with [GitHub CLI](https://cli.github.com/)):
+3. Create a GitHub Release (tag e.g. `v0.1.3.260619`) and attach both binaries
 
 ```bat
 cd src-winui
-gh release create v0.0.2.260606 ^
-  installer\output\GSBT_Setup_0.0.2.260606.exe ^
-  installer\output\GSBT_Portable_0.0.2.260606.zip ^
-  --title "GSBT v0.0.2.260606" ^
+gh release create v0.1.3.260619 ^
+  installer\output\GSBT_Setup_0.1.3.260619.exe ^
+  installer\output\GSBT_Portable_0.1.3.260619.zip ^
+  --title "GSBT v0.1.3.260619" ^
   --notes-file ..\CHANGELOG.md
 ```
 
@@ -155,6 +159,7 @@ Details: [installer/README.md](installer/README.md).
 
 | Document | Description |
 |----------|-------------|
+| [../THIRD_PARTY.md](../THIRD_PARTY.md) | Bundled `7z.dll` and other licenses |
 | [docs/SANDBOX.md](docs/SANDBOX.md) | Optional developer sandbox (`-s`) |
 | [docs/INSTALLER_PLAN.md](docs/INSTALLER_PLAN.md) | Installer layout and decisions |
 | [installer/README.md](installer/README.md) | Build and QA the Inno Setup package |

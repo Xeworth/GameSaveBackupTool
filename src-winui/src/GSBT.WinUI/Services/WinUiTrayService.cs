@@ -159,9 +159,29 @@ public sealed class WinUiTrayService : IDisposable
             _trayProgressItem.Foreground = new SolidColorBrush(Color.FromArgb(255, 0x6b, 0x69, 0xf8));
         }
 
-        var canCancel = _viewModel.CanCancelOperation;
-        _trayCancelItem!.Visibility = canCancel ? Visibility.Visible : Visibility.Collapsed;
-        _trayCancelItem.IsEnabled = canCancel;
+        if (_viewModel.OperationCancelRequested)
+        {
+            _trayCancelItem!.Text = "Canceling…";
+            _trayCancelItem.Visibility = Visibility.Visible;
+            _trayCancelItem.IsEnabled = false;
+            try
+            {
+                _trayCancelItem.Foreground = Application.Current.Resources["TextFillColorSecondaryBrush"] as Brush
+                    ?? new SolidColorBrush(Color.FromArgb(255, 0x9a, 0x9a, 0x9a));
+            }
+            catch
+            {
+                _trayCancelItem.Foreground = new SolidColorBrush(Color.FromArgb(255, 0x9a, 0x9a, 0x9a));
+            }
+        }
+        else
+        {
+            _trayCancelItem!.Text = "Cancel";
+            var canCancel = _viewModel.CanCancelOperation;
+            _trayCancelItem.Visibility = canCancel ? Visibility.Visible : Visibility.Collapsed;
+            _trayCancelItem.IsEnabled = canCancel;
+            _trayCancelItem.Foreground = new SolidColorBrush(Color.FromArgb(255, 0xc4, 0x2b, 0x1c));
+        }
     }
 
     private void RemoveTrayProgressItems(MenuFlyout flyout)

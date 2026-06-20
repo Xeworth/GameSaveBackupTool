@@ -1,16 +1,14 @@
 using System.Diagnostics;
-using System.IO.Compression;
-using System.Text;
+using SharpSevenZip;
 
 namespace GSBT.Core.Services;
 
-/// <summary>Compresses the backup folder to a single archive beside Python behavior (zipfile or 7-Zip).</summary>
+/// <summary>Compresses the backup folder to a single <c>.7z</c> archive via bundled <c>7z.dll</c>.</summary>
 public sealed class BackupCompressionService
 {
     /// <summary>
-    /// Output archive is written <b>inside</b> <paramref name="backupFolder"/> as <c>Backups_yyyy-MM-dd_HH-mm-ss.{ext}</c>.
-    /// Files collected for compression <b>exclude</b> prior GSBT full-folder archives at the backup root (<c>Backups_*.zip</c> / <c>Backups_*.7z</c>)
-    /// so a new archive does not nest older archives.
+    /// Output archive is written <b>inside</b> <paramref name="backupFolder"/> as <c>Backups_yyyy-MM-dd_HH-mm-ss.7z</c>.
+    /// Files collected for compression <b>exclude</b> prior GSBT full-folder archives at the backup root.
     /// </summary>
     public async Task<BackupCompressionResult> CompressBackupFolderAsync(
         string backupFolder,
@@ -18,10 +16,24 @@ public sealed class BackupCompressionService
         IProgress<int>? progressPercent,
         Action<string>? log,
         Action<string>? reportActiveGameFolder = null,
+        Action<CompressionGameTrackUpdate>? reportGameTrack = null,
         CancellationToken cancellationToken = default,
         bool subfolderPerGame = true,
         IReadOnlySet<string>? sanitizedGameFolderNames = null)
     {
+        if (!SevenZipNativeLibrary.IsAvailable)
+        {
+            var err = SevenZipNativeLibrary.LastError ?? "7z.dll is not loaded.";
+            return new BackupCompressionResult(
+                false,
+                $"Compression engine unavailable: {err}",
+                string.Empty,
+                0,
+                0,
+                0,
+                options);
+        }
+
         if (!Directory.Exists(backupFolder))
         {
             throw new DirectoryNotFoundException(backupFolder);
@@ -37,10 +49,7 @@ public sealed class BackupCompressionService
         }
 
         var stamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-        var ext = options.Engine == "7z"
-            ? (options.SevenArchiveFormat is "zip" or "7z" ? options.SevenArchiveFormat : "7z")
-            : "zip";
-        var archiveName = $"Backups_{stamp}.{ext}";
+        var archiveName = $"Backups_{stamp}.7z";
         var archivePath = Path.Combine(backupFolder, archiveName);
 
         void L(string m)
@@ -59,39 +68,18 @@ public sealed class BackupCompressionService
         var sw = Stopwatch.StartNew();
         try
         {
-            if (options.Engine == "7z")
-            {
-                if (string.IsNullOrEmpty(options.SevenZipExe) || !File.Exists(options.SevenZipExe))
-                {
-                    return new BackupCompressionResult(false, "7-Zip executable not found. Install 7-Zip or set path in Settings → Compression.", string.Empty, 0, 0, 0, options);
-                }
-
-                await RunSevenZipAsync(
-                        backupFolder,
-                        archivePath,
-                        options,
-                        entries,
-                        totalBytes,
-                        progressPercent,
-                        L,
-                        reportActiveGameFolder,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            else
-            {
-                await RunZipArchiveAsync(
-                        backupFolder,
-                        archivePath,
-                        options,
-                        entries,
-                        fileCount,
-                        progressPercent,
-                        L,
-                        reportActiveGameFolder,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-            }
+            await RunSevenZipNativeAsync(
+                    archivePath,
+                    options,
+                    entries,
+                    totalBytes,
+                    fileCount,
+                    progressPercent,
+                    L,
+                    reportActiveGameFolder,
+                    reportGameTrack,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         catch
         {
@@ -127,216 +115,149 @@ public sealed class BackupCompressionService
         }
     }
 
-    private static async Task RunZipArchiveAsync(
-        string backupFolder,
-        string archivePath,
-        CompressionOptions options,
-        List<(string FullPath, string EntryName)> entries,
-        int fileCount,
-        IProgress<int>? progressPercent,
-        Action<string> log,
-        Action<string>? reportActiveGameFolder,
-        CancellationToken cancellationToken)
-    {
-        await using var fs = new FileStream(archivePath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
-        using var archive = new ZipArchive(fs, ZipArchiveMode.Create, leaveOpen: false);
-        var level = MapCompressionLevel(options);
-        var count = 0;
-        foreach (var (full, entryName) in entries)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            reportActiveGameFolder?.Invoke(TopLevelFolderFromEntry(entryName));
-            var entry = archive.CreateEntry(entryName, level);
-            await using var entryStream = entry.Open();
-            await using var input = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            await input.CopyToAsync(entryStream, cancellationToken).ConfigureAwait(false);
-            count++;
-            var pct = fileCount > 0 ? (int)(100.0 * count / fileCount) : 100;
-            progressPercent?.Report(Math.Min(100, pct));
-            if (count % 25 == 0 || count == fileCount)
-            {
-                log($"ZIP… {count}/{fileCount} files");
-            }
-        }
-
-        progressPercent?.Report(100);
-    }
-
-    private static CompressionLevel MapCompressionLevel(CompressionOptions options)
-    {
-        if (options.ZipKind == CompressionKind.Stored)
-        {
-            return CompressionLevel.NoCompression;
-        }
-
-        var d = Math.Clamp(options.DeflateLevel, 1, 9);
-        return d switch
-        {
-            >= 8 => CompressionLevel.SmallestSize,
-            <= 3 => CompressionLevel.Fastest,
-            _ => CompressionLevel.Optimal,
-        };
-    }
-
-    private static async Task RunSevenZipAsync(
-        string backupFolder,
+    private static Task RunSevenZipNativeAsync(
         string archivePath,
         CompressionOptions options,
         List<(string FullPath, string EntryName)> entries,
         long totalBytes,
+        int fileCount,
         IProgress<int>? progressPercent,
         Action<string> log,
         Action<string>? reportActiveGameFolder,
+        Action<CompressionGameTrackUpdate>? reportGameTrack,
         CancellationToken cancellationToken)
     {
-        var listPath = Path.Combine(Path.GetTempPath(), $"gsbt_7z_{Guid.NewGuid():N}.txt");
-        try
+        var fileDictionary = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var bytesByEntry = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (fullPath, entryName) in entries)
         {
-            await File.WriteAllLinesAsync(
-                    listPath,
-                    entries.Select(e => e.EntryName.Replace('/', Path.DirectorySeparatorChar)),
-                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-                    cancellationToken)
-                .ConfigureAwait(false);
+            var key = entryName.Replace('\\', '/');
+            fileDictionary[key] = fullPath;
+            bytesByEntry[key] = TryGetFileLength(fullPath);
+        }
 
-            var outAbs = Path.GetFullPath(archivePath);
-            var listAbs = Path.GetFullPath(listPath);
-            var fmt = options.SevenArchiveFormat is "zip" or "7z" ? options.SevenArchiveFormat : "7z";
-            var args = new List<string>();
-            if (fmt == "7z")
+        var gameOrder = GetOrderedGameFoldersFromEntries(entries);
+        string? trackedPrevious = null;
+        string? trackedCurrent = null;
+
+        void ReportGameTransition(string gameFolder)
+        {
+            if (reportGameTrack is null || string.IsNullOrWhiteSpace(gameFolder))
             {
-                args.AddRange(new[] { "a", "-t7z", "-m0=lzma2", $"-mx={options.SevenMx}" });
-            }
-            else
-            {
-                args.AddRange(new[] { "a", "-tzip", $"-mx={options.SevenMx}" });
+                return;
             }
 
-            if (options.SevenMmt <= 0)
+            if (string.Equals(gameFolder, trackedCurrent, StringComparison.OrdinalIgnoreCase))
             {
-                args.Add("-mmt=on");
-            }
-            else
-            {
-                args.Add($"-mmt={options.SevenMmt}");
+                return;
             }
 
-            args.AddRange(new[] { "-bso0", "-y", outAbs, $"@{listAbs}" });
-
-            var psi = new ProcessStartInfo
+            if (!string.IsNullOrEmpty(trackedCurrent))
             {
-                FileName = options.SevenZipExe!,
-                WorkingDirectory = backupFolder,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            foreach (var a in args)
-            {
-                psi.ArgumentList.Add(a);
+                trackedPrevious = trackedCurrent;
             }
 
-            using var proc = Process.Start(psi);
-            if (proc is null)
+            trackedCurrent = gameFolder;
+            var upcoming = string.Empty;
+            for (var i = 0; i < gameOrder.Count; i++)
             {
-                throw new InvalidOperationException("Could not start 7-Zip process.");
+                if (string.Equals(gameOrder[i], trackedCurrent, StringComparison.OrdinalIgnoreCase)
+                    && i + 1 < gameOrder.Count)
+                {
+                    upcoming = gameOrder[i + 1];
+                    break;
+                }
             }
 
-            using (cancellationToken.Register(() =>
-                   {
-                       try
-                       {
-                           if (!proc.HasExited)
-                           {
-                               proc.Kill(entireProcessTree: true);
-                           }
-                       }
-                       catch
-                       {
-                           // ignore
-                       }
-                   }))
+            reportGameTrack(new CompressionGameTrackUpdate(
+                trackedPrevious ?? string.Empty,
+                trackedCurrent,
+                upcoming));
+        }
+
+        return Task.Run(
+            () =>
             {
-            var t0 = DateTime.UtcNow;
-            var floor = 0;
-            var fileCount = entries.Count;
-            var lastReportedEntryIndex = -1;
-            while (!proc.HasExited)
-            {
+                var mappedLevel = SevenZipCompressionLevelMapper.MapMxToCompressionLevel(options.SevenMx);
+                var compressor = new SharpSevenZipCompressor
+                {
+                    ArchiveFormat = OutArchiveFormat.SevenZip,
+                    CompressionMethod = CompressionMethod.Lzma2,
+                    CompressionLevel = mappedLevel,
+                    DirectoryStructure = true,
+                    IncludeEmptyDirectories = false,
+                };
+                compressor.CustomParameters["mt"] = options.SevenMmt <= 0
+                    ? "on"
+                    : options.SevenMmt.ToString();
+                compressor.CustomParameters["s"] = options.SolidArchive ? "on" : "off";
+
+                var progress = new NativeCompressProgressTracker(totalBytes, fileCount);
+                var lastLoggedPct = -1;
+
+                void ReportProgress(int pct)
+                {
+                    pct = Math.Clamp(pct, 0, 99);
+                    progressPercent?.Report(pct);
+                    if (pct / 5 != lastLoggedPct / 5 || pct >= 95)
+                    {
+                        lastLoggedPct = pct;
+                        log($"7-Zip… {pct}%");
+                    }
+                }
+
+                compressor.Compressing += (_, e) =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    ReportProgress(progress.ComputePercent(e.PercentDone));
+                };
+
+                compressor.FileCompressionStarted += (_, e) =>
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        e.Cancel = true;
+                        return;
+                    }
+
+                    var name = e.FileName;
+                    if (string.IsNullOrWhiteSpace(name))
+                    {
+                        return;
+                    }
+
+                    var key = name.Replace('\\', '/');
+                    var fileBytes = bytesByEntry.TryGetValue(key, out var sz) ? sz : 0;
+                    progress.OnFileStarted(fileBytes);
+                    var gameFolder = TopLevelFolderFromEntry(key);
+                    reportActiveGameFolder?.Invoke(gameFolder);
+                    ReportGameTransition(gameFolder);
+                };
+
+                compressor.FileCompressionFinished += (_, _) =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    progress.OnFileFinished();
+                    ReportProgress(progress.ComputePercent(0));
+                };
+
+                compressor.CompressFileDictionary(fileDictionary, archivePath, string.Empty);
                 cancellationToken.ThrowIfCancellationRequested();
-                await Task.Delay(250, cancellationToken).ConfigureAwait(false);
-                var zsz = File.Exists(outAbs) ? new FileInfo(outAbs).Length : 0L;
-                var pct = EstimateSevenZipUiPercent(zsz, totalBytes, t0);
-                pct = Math.Max(floor, Math.Min(95, pct));
-                floor = pct;
-                progressPercent?.Report(pct);
-                if (fileCount > 0)
-                {
-                    var idx = (int)Math.Round(pct / 100.0 * Math.Max(0, fileCount - 1));
-                    idx = Math.Clamp(idx, 0, fileCount - 1);
-                    ReportSevenZipEntryProgress(
-                        lastReportedEntryIndex,
-                        idx,
-                        entries,
-                        reportActiveGameFolder,
-                        out lastReportedEntryIndex);
-                }
-
-                log($"7-Zip… ~{pct}% (~{zsz / (1024 * 1024)} MiB on disk)");
-            }
-
-            if (fileCount > 0)
-            {
-                ReportSevenZipEntryProgress(
-                    lastReportedEntryIndex,
-                    fileCount - 1,
-                    entries,
-                    reportActiveGameFolder,
-                    out _);
-            }
-
-            await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            if (proc.ExitCode != 0)
-            {
-                throw new InvalidOperationException($"7-Zip failed with exit code {proc.ExitCode}.");
-            }
-
-            progressPercent?.Report(100);
-            }
-        }
-        finally
-        {
-            try
-            {
-                if (File.Exists(listPath))
-                {
-                    File.Delete(listPath);
-                }
-            }
-            catch
-            {
-                // ignore
-            }
-        }
+                progressPercent?.Report(100);
+            },
+            cancellationToken);
     }
 
-    /// <summary>Rough progress from growing archive size (Python <c>_seven_zip_ui_percent</c> simplified).</summary>
-    private static int EstimateSevenZipUiPercent(long archiveBytes, long totalUncompressed, DateTime startUtc)
+    private static long TryGetFileLength(string path)
     {
-        if (totalUncompressed <= 0)
+        try
+        {
+            return new FileInfo(path).Length;
+        }
+        catch
         {
             return 0;
         }
-
-        var elapsed = (DateTime.UtcNow - startUtc).TotalSeconds;
-        var totalMb = Math.Max(1e-9, totalUncompressed / (1024.0 * 1024.0));
-        var wallGuess = Math.Max(6.0, Math.Min(90.0, 4.5 + Math.Pow(totalMb, 0.5) * 2.4 + totalMb * 0.05));
-        var estSec = Math.Max(3.2, Math.Min(36.0, wallGuess * 0.42));
-        var ratio = 1.0 - Math.Exp(-elapsed / estSec);
-        var timePct = (int)(94 * Math.Pow(ratio, 0.48));
-        var sizePct = (int)(100.0 * archiveBytes / totalUncompressed);
-        var blended = Math.Max(sizePct, timePct);
-        var scaled = (int)(blended * 1.115 + 1.5);
-        return Math.Clamp(scaled, 0, 95);
     }
 
     /// <summary>Root-level archives created by this tool; must not be included in the next full-folder compress.</summary>
@@ -402,30 +323,23 @@ public sealed class BackupCompressionService
         return (list, total, list.Count);
     }
 
-    /// <summary>
-    /// Reports each top-level game folder from <paramref name="lastReportedEntryIndex"/> + 1 through
-    /// <paramref name="estimatedEntryIndex"/> so fast/small games are not skipped when 7-Zip progress jumps.
-    /// </summary>
-    internal static void ReportSevenZipEntryProgress(
-        int lastReportedEntryIndex,
-        int estimatedEntryIndex,
-        IReadOnlyList<(string FullPath, string EntryName)> entries,
-        Action<string>? reportActiveGameFolder,
-        out int newLastReportedEntryIndex)
+    internal static IReadOnlyList<string> GetOrderedGameFoldersFromEntries(
+        IReadOnlyList<(string FullPath, string EntryName)> entries)
     {
-        newLastReportedEntryIndex = lastReportedEntryIndex;
-        if (entries.Count == 0 || reportActiveGameFolder is null)
+        var gameOrder = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (_, entryName) in entries)
         {
-            return;
+            var top = TopLevelFolderFromEntry(entryName.Replace('\\', '/'));
+            if (string.IsNullOrEmpty(top) || !seen.Add(top))
+            {
+                continue;
+            }
+
+            gameOrder.Add(top);
         }
 
-        var idx = Math.Clamp(estimatedEntryIndex, 0, entries.Count - 1);
-        for (var i = lastReportedEntryIndex + 1; i <= idx; i++)
-        {
-            reportActiveGameFolder(TopLevelFolderFromEntry(entries[i].EntryName));
-        }
-
-        newLastReportedEntryIndex = Math.Max(lastReportedEntryIndex, idx);
+        return gameOrder;
     }
 
     internal static string TopLevelFolderFromEntry(string entryName)

@@ -1,245 +1,157 @@
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using GSBT.Core.Services;
-using GSBT.WinUI;
 using GSBT.WinUI.Controls;
 using GSBT.WinUI.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
-using Windows.Storage.Pickers;
-using Windows.System;
-using Windows.UI;
-using WinRT.Interop;
 
 namespace GSBT.WinUI.Views;
 
 public sealed partial class SettingsPanel
 {
-    private sealed record CompressionTabBaseline(bool AskCompressOnExit, string Preset, string SevenFormat, int Mx, int Threads, string SevenPath);
+    private sealed record CompressionTabBaseline(
+        bool AskCompressOnExit,
+        int Mx,
+        int Threads,
+        bool SolidArchive,
+        bool ScreenSaverEnabled,
+        int ScreenSaverWaitSeconds);
 
     private StackPanel BuildCompressTab()
     {
         var root = new StackPanel();
         ApplySettingsTabShell(root);
-        AddSettingsSectionTitle(root, "Compression engine", largeTopMargin: false);
+        AddSettingsSectionTitle(root, "Compression", largeTopMargin: false);
 
-        _compressionPresetCombo = CreateSettingsDropdown();
-        _compressionPresetCombo.HorizontalAlignment = HorizontalAlignment.Stretch;
-        _compressionPresetCombo.AddOption("Store (no compression, fastest)", CompressionOptionsResolver.PresetStore);
-        _compressionPresetCombo.AddOption("ZIP — fast deflate", CompressionOptionsResolver.PresetDeflateFast);
-        _compressionPresetCombo.AddOption("ZIP — balanced deflate", CompressionOptionsResolver.PresetDeflateBalanced);
-        _compressionPresetCombo.AddOption("ZIP — max deflate", CompressionOptionsResolver.PresetDeflateMax);
-        _compressionPresetCombo.AddOption("7-Zip engine", CompressionOptionsResolver.PresetSevenZip);
-        _compressionPresetCombo.SetSelectedTag(CompressionOptionsResolver.PresetDeflateBalanced);
-        _compressionPresetCombo.SelectionChanged += (_, _) => SyncCompressionSubUi();
+        _compressionArchiveModeCombo = CreateSettingsCombo(SettingsIntrinsicValueMaxWidth);
+        _compressionArchiveModeCombo.AddOption("Per-file (smooth progress)", "per_file");
+        _compressionArchiveModeCombo.AddOption("Solid block (smaller archive)", "solid");
+        _compressionArchiveModeCombo.SetSelectedTag("solid");
         SetDelayedSettingsToolTip(
-            _compressionPresetCombo,
-            "Built-in ZIP is single-threaded. The 7-Zip engine uses 7z.exe for .7z (LZMA2) or .zip.");
-        _get7zipButton = new Button
-        {
-            Content = "Get 7-Zip",
-            FontSize = CompactFont,
-            MinHeight = UiMetrics.SettingsDropdownMinHeight,
-            Padding = new Thickness(12, 4, 12, 4),
-            Style = Application.Current.Resources["DefaultButtonStyle"] as Style,
-        };
-        _get7zipButton.Click += Get7Zip_Click;
-        SetDelayedSettingsToolTip(_get7zipButton, "Download and install the pinned 7-Zip build silently (consent dialog first).");
+            _compressionArchiveModeCombo,
+            "Per-file: steady progress, per-game tracking, quick cancel, larger archives, slower overall. "
+            + "Solid block: smaller archives, faster runs, jumpy progress, heavier CPU spikes, slow cancel.");
 
-        _sevenZipOfficialSiteButton = new Button
-        {
-            Content = "Official 7-Zip site",
-            FontSize = CompactFont,
-            MinHeight = UiMetrics.SettingsDropdownMinHeight,
-            Padding = new Thickness(12, 4, 12, 4),
-            Style = Application.Current.Resources["DefaultButtonStyle"] as Style,
-        };
-        _sevenZipOfficialSiteButton.Click += SevenZipOfficialSiteButton_Click;
-        SetDelayedSettingsToolTip(_sevenZipOfficialSiteButton, "Open 7-zip.org in your browser (latest builds from the vendor).");
+        root.Children.Add(
+            WrapInSettingsCard(
+                CreateSettingRow(
+                    "Archive mode",
+                    description: null,
+                    _compressionArchiveModeCombo,
+                    intrinsicComboWidth: SettingsIntrinsicValueMaxWidth)));
 
-        _sevenZipInfoButton = new Button
+        var mxIndexMax = SevenZipCompressionLevelMapper.SliderIndexCount - 1;
+        _compressionLevelSlider = new Slider
         {
-            MinWidth = 30,
-            MinHeight = UiMetrics.SettingsDropdownMinHeight,
-            Padding = new Thickness(4, 0, 4, 0),
-            Style = Application.Current.Resources["DefaultButtonStyle"] as Style,
-            Content = new FontIcon
-            {
-                FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                Glyph = "\uE946",
-                FontSize = 14,
-            },
-        };
-        _sevenZipInfoButton.Click += SevenZipInfoButton_Click;
-        SetDelayedSettingsToolTip(_sevenZipInfoButton, "Show a tip below this row: Get 7-Zip vs Official 7-Zip site (pinned version vs latest on the web).");
-
-        _sevenZipEngineActionsStrip = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 10,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        _sevenZipEngineActionsStrip.Children.Add(_get7zipButton);
-        _sevenZipEngineActionsStrip.Children.Add(_sevenZipOfficialSiteButton);
-        _sevenZipEngineActionsStrip.Children.Add(_sevenZipInfoButton);
-
-        _compressionEngineRowGrid = new Grid
-        {
+            Minimum = 0,
+            Maximum = mxIndexMax,
+            StepFrequency = 1,
+            TickFrequency = 1,
+            TickPlacement = TickPlacement.Outside,
+            Value = SevenZipCompressionLevelMapper.SliderIndexFromMx(5),
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            MinHeight = UiMetrics.SettingsDropdownMinHeight,
+        };
+        _compressionLevelSlider.ValueChanged += (_, _) => UpdateCompressionLevelLabel();
+        CompressionLevelSliderUi.WireMxLevelFlyout(_compressionLevelSlider);
+
+        _compressionLevelLabel = new TextBlock
+        {
+            FontSize = CompactFont,
+            MinWidth = 28,
+            TextAlignment = TextAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        _compressionEngineRowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        _compressionEngineRowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(_compressionPresetCombo, 0);
-        Grid.SetColumn(_sevenZipEngineActionsStrip, 1);
-        _compressionEngineRowGrid.Children.Add(_compressionPresetCombo);
-        _compressionEngineRowGrid.Children.Add(_sevenZipEngineActionsStrip);
+        _compressionLevelLabel.Foreground = TryBrush("GsbtBodyTextBrush");
+        _themedForegroundTextBlocks.Add((_compressionLevelLabel, "GsbtBodyTextBrush"));
 
-        _sevenZipInstallStatusText = new TextBlock
-        {
-            FontSize = CompactFont,
-            TextWrapping = TextWrapping.WrapWholeWords,
-        };
-        _sevenZipInstallStatusText.Foreground = TryBrush("GsbtSecondaryLabelBrush");
-        _themedForegroundTextBlocks.Add((_sevenZipInstallStatusText, "GsbtSecondaryLabelBrush"));
+        var levelRow = new Grid { ColumnSpacing = 12 };
+        levelRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        levelRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(_compressionLevelSlider, 0);
+        Grid.SetColumn(_compressionLevelLabel, 1);
+        levelRow.Children.Add(_compressionLevelSlider);
+        levelRow.Children.Add(_compressionLevelLabel);
+        SetDelayedSettingsToolTip(
+            levelRow,
+            "Levels 0, 1, 3, 5, 7, 9 only (real 7-Zip tiers). 0 = store … 9 = maximum. Archives use bundled 7-Zip (.7z LZMA2).");
 
-        root.Children.Add(
-            WrapInSettingsCard(
-                CreateSettingRow(
-                    "Preset",
-                    description: null,
-                    _compressionEngineRowGrid,
-                    CompressionTabInputColumnWidth)));
-
-        AddSettingsSectionTitle(root, "Engine settings", largeTopMargin: true);
-
-        _sevenZipGetVsWebsiteTeachingTipBody = new TextBlock
-        {
-            MaxWidth = 340,
-            TextWrapping = TextWrapping.WrapWholeWords,
-            Text = BuildSevenZipPinnedVsLatestTeachingTipText(),
-        };
-        _sevenZipGetVsWebsiteTeachingTip = new TeachingTip
-        {
-            Title = "Get 7-Zip vs website",
-            PreferredPlacement = TeachingTipPlacementMode.Bottom,
-            PlacementMargin = new Thickness(0, 0, 0, 10),
-            IsLightDismissEnabled = true,
-            Content = _sevenZipGetVsWebsiteTeachingTipBody,
-            Target = _compressionEngineRowGrid,
-        };
-
-        _compression7zFormatCombo = CreateSettingsDropdown(SettingsIntrinsicValueMaxWidth);
-        _compression7zFormatCombo.AddOption(".7z archive (LZMA2, multithreaded, recommended)", "7z");
-        _compression7zFormatCombo.AddOption(".zip archive (Deflate via 7-Zip)", "zip");
-        _compression7zFormatCombo.SetSelectedTag("7z");
-        _compression7zFormatCombo.SelectionChanged += (_, _) => SyncCompressionSubUi();
-        SetDelayedSettingsToolTip(_compression7zFormatCombo, "Used only when the 7-Zip engine preset is selected.");
-
-        root.Children.Add(
-            WrapInSettingsCard(
-                CreateSettingRow(
-                    "7-Zip output format",
-                    description: null,
-                    _compression7zFormatCombo)));
-
-        _compressionMxBox = new NumberBox
+        _compressionThreadsSliderMax = CompressionOptionsResolver.LogicalProcessorCount;
+        _compressionThreadsSlider = new Slider
         {
             Minimum = 0,
-            Maximum = 9,
-            Value = 5,
-            FontSize = CompactFont,
-            MinWidth = 72,
-            MinHeight = SettingsControlHeight,
-            MaxHeight = SettingsControlHeight,
-            Height = SettingsControlHeight,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
-        };
-        SetDelayedSettingsToolTip(_compressionMxBox, "0 = copy/store … 9 = smallest/slowest. For .7z LZMA2, 5–7 is a good balance.");
-        root.Children.Add(
-            WrapInSettingsCard(
-                CreateSettingRow(
-                    "7-Zip level (-mx)",
-                    description: null,
-                    _compressionMxBox)));
-
-        _compressionThreadsBox = new NumberBox
-        {
-            Minimum = 0,
-            Maximum = 128,
+            Maximum = _compressionThreadsSliderMax,
+            StepFrequency = 1,
+            TickFrequency = 1,
+            TickPlacement = TickPlacement.Outside,
             Value = 0,
-            FontSize = CompactFont,
-            MinWidth = 80,
-            MinHeight = SettingsControlHeight,
-            MaxHeight = SettingsControlHeight,
-            Height = SettingsControlHeight,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
-        };
-        SetDelayedSettingsToolTip(_compressionThreadsBox, "0 = Auto (7-Zip uses logical cores). Set e.g. 16 to cap load.");
-        root.Children.Add(
-            WrapInSettingsCard(
-                CreateSettingRow(
-                    "7-Zip threads (-mmt)",
-                    description: null,
-                    _compressionThreadsBox)));
-
-        _compression7zPathDisplay = new TextBlock
-        {
-            FontSize = CompactFont,
-            TextWrapping = TextWrapping.WrapWholeWords,
-            VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            IsTextSelectionEnabled = true,
         };
+        _compressionThreadsSlider.ValueChanged += (_, _) => UpdateCompressionThreadsLabel();
 
-        _browse7zButton = new Button
+        _compressionThreadsLabel = new TextBlock
         {
-            Content = "Browse…",
             FontSize = CompactFont,
-            MinHeight = SettingsControlHeight,
-            MaxHeight = SettingsControlHeight,
-            Height = SettingsControlHeight,
-            Padding = new Thickness(12, 4, 12, 4),
-            Style = Application.Current.Resources["DefaultButtonStyle"] as Style,
+            MinWidth = 36,
+            TextAlignment = TextAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            Text = "Auto",
         };
-        _browse7zButton.Click += Browse7zExe_Click;
-        SetDelayedSettingsToolTip(_browse7zButton, "Pick 7z.exe manually.");
+        _compressionThreadsLabel.Foreground = TryBrush("GsbtBodyTextBrush");
+        _themedForegroundTextBlocks.Add((_compressionThreadsLabel, "GsbtBodyTextBrush"));
 
-        var pathRow = new Grid { ColumnSpacing = 8 };
-        pathRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        pathRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(_compression7zPathDisplay, 0);
-        Grid.SetColumn(_browse7zButton, 1);
-        pathRow.Children.Add(_compression7zPathDisplay);
-        pathRow.Children.Add(_browse7zButton);
+        var threadsRow = new Grid { ColumnSpacing = 12 };
+        threadsRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        threadsRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(_compressionThreadsSlider, 0);
+        Grid.SetColumn(_compressionThreadsLabel, 1);
+        threadsRow.Children.Add(_compressionThreadsSlider);
+        threadsRow.Children.Add(_compressionThreadsLabel);
         SetDelayedSettingsToolTip(
-            pathRow,
-            "Optional override. Empty = search PATH and Program Files\\7-Zip. Use Browse… to set 7z.exe.");
+            threadsRow,
+            $"Auto lets 7-Zip choose thread count (recommended). Slide right to cap cores (1 … {_compressionThreadsSliderMax} on this PC).");
 
-        _sevenZipExecutableCard = WrapInSettingsCard(
-            CreateStackedCard(
-                "7-Zip executable",
+        var slidersInner = new StackPanel { Spacing = CardInnerSpacing };
+        slidersInner.Children.Add(
+            CreateSettingRow(
+                "Compression level",
                 description: null,
-                pathRow));
-        root.Children.Add(_sevenZipExecutableCard);
+                levelRow,
+                CompressionTabInputColumnWidth));
+        slidersInner.Children.Add(
+            CreateSettingRow(
+                "CPU threads",
+                description: null,
+                threadsRow,
+                CompressionTabInputColumnWidth));
+        root.Children.Add(WrapInSettingsCard(slidersInner));
 
-        ApplyCompression7zPathDisplay();
+        AddSettingsSectionTitle(root, "Screen saver");
+        _screenSaverEnabledCheck = new CheckBox
+        {
+            Content = "Enable screen saver",
+            FontSize = CompactFont,
+        };
+        ConfigureCheckBox(_screenSaverEnabledCheck);
+        _screenSaverEnabledCheck.Checked += (_, _) => SyncScreenSaverDependentUi();
+        _screenSaverEnabledCheck.Unchecked += (_, _) => SyncScreenSaverDependentUi();
 
-        _sevenZipOnPcCard = WrapInSettingsCard(
-            CreateStackedCard(
-                "7-Zip on this PC",
-                description: App.IsSandboxSimulationChild
-                    ? "Sandbox can pretend 7-Zip is installed or missing (Compression UI only)."
-                    : null,
-                _sevenZipInstallStatusText,
-                innerSpacing: 4,
-                normalizeBody: false));
-        root.Children.Add(_sevenZipOnPcCard);
+        _screenSaverWaitCombo = CreateSettingsCombo(SettingsIntrinsicValueMaxWidth);
+        for (var sec = 10; sec <= 60; sec += 10)
+        {
+            _screenSaverWaitCombo.AddOption($"{sec} seconds", sec);
+        }
+
+        _screenSaverWaitCombo.SetSelectedTag(60);
+        var screenSaverInner = new StackPanel { Spacing = CardInnerSpacing };
+        screenSaverInner.Children.Add(_screenSaverEnabledCheck);
+        screenSaverInner.Children.Add(
+            CreateSettingRow(
+                "Wait time",
+                description: null,
+                _screenSaverWaitCombo,
+                intrinsicComboWidth: SettingsIntrinsicValueMaxWidth));
+        root.Children.Add(WrapInSettingsCard(screenSaverInner));
 
         AddSettingsSectionTitle(root, "Compress before exit");
         _askCompressOnExitCheck = new CheckBox
@@ -253,7 +165,8 @@ public sealed partial class SettingsPanel
         var foot = new TextBlock
         {
             Text =
-                "Archives are written in your backup folder as Backups_<date>.zip or .7z. Root-level Backups_* files are never included inside the next archive. "
+                "Archives are written in your backup folder as Backups_<date>.7z. Root-level Backups_* files are never included inside the next archive. "
+                + "Compression level sets how hard 7-Zip squeezes data; archive mode chooses solid vs per-file packing; CPU threads is best left on Auto. "
                 + "When you fully exit (not tray minimize), you can be asked to compress first if Ask to compress backups when closing is enabled.",
             FontSize = CompactFont,
             TextWrapping = TextWrapping.WrapWholeWords,
@@ -262,220 +175,85 @@ public sealed partial class SettingsPanel
         _themedForegroundTextBlocks.Add((foot, "GsbtSecondaryLabelBrush"));
         root.Children.Add(WrapInSettingsCard(foot));
 
+        UpdateCompressionLevelLabel();
+        UpdateCompressionThreadsLabel();
+
         return root;
     }
 
-    private void ApplyCompression7zPathDisplay()
+    private void UpdateCompressionLevelLabel()
     {
-        var path = _compression7zPathValue.Trim();
-        if (string.IsNullOrEmpty(path))
-        {
-            _compression7zPathDisplay.Text =
-                "Leave empty to auto-detect 7z.exe; use Browse… to point at 7z.exe.";
-            _compression7zPathDisplay.Foreground = TryBrush("GsbtSecondaryLabelBrush");
-        }
-        else
-        {
-            _compression7zPathDisplay.Text = path;
-            _compression7zPathDisplay.Foreground = TryBrush("GsbtBodyTextBrush");
-        }
+        var index = (int)Math.Round(_compressionLevelSlider.Value);
+        _compressionLevelLabel.Text = SevenZipCompressionLevelMapper.MxFromSliderIndex(index).ToString();
+    }
+
+    private void UpdateCompressionThreadsLabel()
+    {
+        var threads = (int)Math.Round(_compressionThreadsSlider.Value);
+        _compressionThreadsLabel.Text = threads <= 0 ? "Auto" : threads.ToString();
     }
 
     private void ReloadCompressionFields()
     {
         _askCompressOnExitCheck.IsChecked = _store.Get("ask_compress_on_exit", false);
-        var preset = CompressionOptionsResolver.NormalizePreset(_store.Get("compression_preset", CompressionOptionsResolver.PresetDeflateBalanced));
-        _compressionPresetCombo.SetSelectedTag(preset);
 
-        var zf = CompressionOptionsResolver.Normalize7zFormat(_store.Get("compression_7z_format", "7z"));
-        _compression7zFormatCombo.SetSelectedTag(zf);
+        var level = _store.Get("compression_7z_level", -1);
+        if (level < 0)
+        {
+            var legacyPreset = _store.Get("compression_preset", "deflate_balanced") ?? "deflate_balanced";
+            level = CompressionOptionsResolver.MapLegacyPresetToLevel(legacyPreset);
+        }
 
-        _compressionMxBox.Value = Math.Clamp(_store.Get("compression_7z_level", 5), 0, 9);
-        _compressionThreadsBox.Value = Math.Clamp(_store.Get("compression_7z_threads", 0), 0, 128);
-        _compression7zPathValue = _store.Get("compression_7z_path", string.Empty) ?? string.Empty;
-        ApplyCompression7zPathDisplay();
-        SyncCompressionSubUi();
+        _compressionLevelSlider.Value = SevenZipCompressionLevelMapper.SliderIndexFromMx(
+            CompressionOptionsResolver.NormalizeLevel(level));
+        UpdateCompressionLevelLabel();
+
+        _compressionThreadsSliderMax = CompressionOptionsResolver.LogicalProcessorCount;
+        _compressionThreadsSlider.Maximum = _compressionThreadsSliderMax;
+        var threads = CompressionOptionsResolver.NormalizeThreadCount(
+            _store.Get("compression_7z_threads", 0),
+            _compressionThreadsSliderMax);
+        _compressionThreadsSlider.Value = threads;
+        UpdateCompressionThreadsLabel();
+
+        var solid = _store.Get(CompressionOptionsResolver.SolidArchiveSettingsKey, true);
+        _compressionArchiveModeCombo.SetSelectedTag(solid ? "solid" : "per_file");
+
+        _screenSaverEnabledCheck.IsChecked = ScreenSaverSettings.IsEnabled(_store);
+        _screenSaverWaitCombo.SetSelectedTag(ScreenSaverSettings.GetWaitSeconds(_store));
+        SyncScreenSaverDependentUi();
     }
 
     private CompressionTabBaseline ReadCompressionBaselineFromUi()
     {
-        var preset = _compressionPresetCombo.GetSelectedStringTag(CompressionOptionsResolver.PresetDeflateBalanced);
-        var fmt = _compression7zFormatCombo.GetSelectedStringTag("7z");
+        var waitSeconds = ScreenSaverSettings.NormalizeWaitSeconds(_screenSaverWaitCombo.GetSelectedIntTag(60));
+        var threads = CompressionOptionsResolver.NormalizeThreadCount(
+            (int)Math.Round(_compressionThreadsSlider.Value),
+            _compressionThreadsSliderMax);
         return new CompressionTabBaseline(
             _askCompressOnExitCheck.IsChecked == true,
-            CompressionOptionsResolver.NormalizePreset(preset),
-            CompressionOptionsResolver.Normalize7zFormat(fmt),
-            (int)Math.Clamp(_compressionMxBox.Value, 0, 9),
-            (int)Math.Clamp(_compressionThreadsBox.Value, 0, 128),
-            _compression7zPathValue.Trim());
+            SevenZipCompressionLevelMapper.MxFromSliderIndex((int)Math.Round(_compressionLevelSlider.Value)),
+            threads,
+            string.Equals(_compressionArchiveModeCombo.GetSelectedStringTag("per_file"), "solid", StringComparison.OrdinalIgnoreCase),
+            _screenSaverEnabledCheck.IsChecked == true,
+            waitSeconds);
     }
 
     private void WriteCompressionSettingsFromUi()
     {
         var b = ReadCompressionBaselineFromUi();
         _store.Set("ask_compress_on_exit", b.AskCompressOnExit);
-        _store.Set("compression_preset", b.Preset);
-        _store.Set("compression_7z_format", b.SevenFormat);
         _store.Set("compression_7z_level", b.Mx);
         _store.Set("compression_7z_threads", b.Threads);
-        _store.Set("compression_7z_path", b.SevenPath);
+        _store.Set(CompressionOptionsResolver.SolidArchiveSettingsKey, b.SolidArchive);
+        _store.Set("compression_preset", CompressionOptionsResolver.PresetNative7z);
+        _store.Set(ScreenSaverSettings.EnabledKey, b.ScreenSaverEnabled);
+        _store.Set(ScreenSaverSettings.WaitSecondsKey, b.ScreenSaverWaitSeconds);
     }
 
-    private void SyncCompressionSubUi()
+    private void SyncScreenSaverDependentUi()
     {
-        var is7 = _compressionPresetCombo.GetSelectedStringTag(string.Empty) == CompressionOptionsResolver.PresetSevenZip;
-        var hintInstalled = _vm.HasSevenZipForSettingsHint();
-        var showMissing7ZipActions = is7 && !hintInstalled;
-        Grid.SetColumnSpan(_compressionPresetCombo, showMissing7ZipActions ? 1 : 2);
-        _compressionPresetCombo.Margin = showMissing7ZipActions ? new Thickness(0, 0, 10, 0) : new Thickness(0);
-        if (!is7)
-        {
-            CloseSevenZipGetVsWebsiteTeachingTipProgrammatically();
-        }
-
-        _compression7zFormatCombo.IsEnabled = is7;
-        _compressionMxBox.IsEnabled = is7;
-        _compressionThreadsBox.IsEnabled = is7;
-        _browse7zButton.IsEnabled = is7;
-        _compression7zPathDisplay.Opacity = is7 ? 1 : 0.55;
-        _get7zipButton.Visibility = showMissing7ZipActions ? Visibility.Visible : Visibility.Collapsed;
-        _sevenZipOfficialSiteButton.Visibility = showMissing7ZipActions ? Visibility.Visible : Visibility.Collapsed;
-        _sevenZipInfoButton.Visibility = showMissing7ZipActions ? Visibility.Visible : Visibility.Collapsed;
-        _sevenZipEngineActionsStrip.Visibility = showMissing7ZipActions ? Visibility.Visible : Visibility.Collapsed;
-        var allowNetInstall = is7 && !App.IsSandboxSimulationChild;
-        _get7zipButton.IsEnabled = allowNetInstall;
-        _sevenZipOfficialSiteButton.IsEnabled = showMissing7ZipActions;
-        _sevenZipInfoButton.IsEnabled = showMissing7ZipActions;
-        ToolTipService.SetToolTip(
-            _get7zipButton,
-            App.IsSandboxSimulationChild && is7 && !hintInstalled
-                ? "Disabled in the simulation — no 7-Zip installer download. Use the full app or install from 7-zip.org."
-                : null);
-        _sevenZipInstallStatusText.Text = _vm.GetSevenZipInstallStatusUiText();
-        _sevenZipOnPcCard.Visibility = is7 ? Visibility.Visible : Visibility.Collapsed;
-        _sevenZipExecutableCard.Visibility = is7 && !hintInstalled ? Visibility.Visible : Visibility.Collapsed;
+        var enabled = _screenSaverEnabledCheck.IsChecked == true;
+        _screenSaverWaitCombo.IsEnabled = enabled;
     }
-
-    private static string BuildSevenZipPinnedVsLatestTeachingTipText() =>
-        $"Get 7-Zip installs this app’s pinned build: 7-Zip {SevenZipDownloadInstall.PinnedDisplayVersion} ({SevenZipDownloadInstall.PinnedBuild}). "
-        + "Official 7-Zip site opens 7-zip.org, where you can download the newest release — often newer than this pinned installer.";
-
-    private void SevenZipInfoButton_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            _sevenZipGetVsWebsiteTeachingTipBody.Text = BuildSevenZipPinnedVsLatestTeachingTipText();
-            _sevenZipGetVsWebsiteTeachingTip.Target = _compressionEngineRowGrid;
-            _sevenZipGetVsWebsiteTeachingTip.IsOpen = !_sevenZipGetVsWebsiteTeachingTip.IsOpen;
-        }
-        catch
-        {
-            // ignore
-        }
-    }
-
-    private async void SevenZipOfficialSiteButton_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            _ = await Launcher.LaunchUriAsync(new Uri("https://www.7-zip.org/"));
-        }
-        catch
-        {
-            // ignore
-        }
-    }
-
-    private async void Browse7zExe_Click(object sender, RoutedEventArgs e)
-    {
-        if (XamlRoot is null || App.MainWindowRef is null)
-        {
-            return;
-        }
-
-        var picker = new FileOpenPicker();
-        picker.FileTypeFilter.Add(".exe");
-        picker.SuggestedStartLocation = PickerLocationId.ComputerFolder;
-        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.MainWindowRef));
-        var f = await picker.PickSingleFileAsync();
-        if (f is not null)
-        {
-            _compression7zPathValue = f.Path;
-            ApplyCompression7zPathDisplay();
-        }
-    }
-
-    private async void Get7Zip_Click(object sender, RoutedEventArgs e)
-    {
-        if (XamlRoot is null)
-        {
-            return;
-        }
-
-        if (App.IsSandboxSimulationChild)
-        {
-            var blocked = new ContentDialog
-            {
-                Title = "Get 7-Zip",
-                CloseButtonText = "Close",
-                DefaultButton = ContentDialogButton.Close,
-                Content = new TextBlock
-                {
-                    TextWrapping = TextWrapping.WrapWholeWords,
-                    IsTextSelectionEnabled = true,
-                    Text =
-                        "Installer download is disabled in the simulation window so traffic stays on your real app. "
-                        + "Use the full Game Save Backup Tool to run Get 7-Zip, or install 7-Zip from 7-zip.org. "
-                        + "You can still pick the 7-Zip engine preset here and use Sandbox monitor → Simulated states to pretend 7-Zip is installed or not.",
-                },
-            };
-            blocked.XamlRoot = XamlRoot;
-            blocked.RequestedTheme = ActualTheme;
-            await GsbtContentDialog.ShowAsync(blocked);
-            return;
-        }
-
-        var consent = new ContentDialog
-        {
-            Title = "Get 7-Zip",
-            PrimaryButtonText = "Continue",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            Content = new ScrollViewer
-            {
-                MaxHeight = 380,
-                Content = new TextBlock
-                {
-                    Text = SevenZipDownloadInstall.ConsentSummaryText(),
-                    TextWrapping = TextWrapping.WrapWholeWords,
-                    IsTextSelectionEnabled = true,
-                },
-            },
-        };
-        consent.XamlRoot = XamlRoot;
-        consent.RequestedTheme = ActualTheme;
-        if (await GsbtContentDialog.ShowAsync(consent) != ContentDialogResult.Primary)
-        {
-            return;
-        }
-
-        _vm.StatusText = "7-Zip: downloading / installing… (see Sandbox monitor → Live log → 7zip)";
-        var msg = await _vm.InstallSevenZipFromOfficialSiteAsync(
-            new Progress<(int percent, string? text)>(v => _vm.StatusText = v.text ?? $"… {v.percent}%"),
-            CancellationToken.None);
-        _vm.StatusText = msg;
-        ReloadCompressionFields();
-        _compressionBaseline = ReadCompressionBaselineFromUi();
-
-        var done = new ContentDialog
-        {
-            Title = "Get 7-Zip",
-            CloseButtonText = "Close",
-            Content = new TextBlock { Text = msg, TextWrapping = TextWrapping.WrapWholeWords, IsTextSelectionEnabled = true },
-        };
-        done.XamlRoot = XamlRoot;
-        done.RequestedTheme = ActualTheme;
-        await GsbtContentDialog.ShowAsync(done);
-    }
-
 }

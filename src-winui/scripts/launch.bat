@@ -48,7 +48,7 @@ echo Build and run log:
 echo   %LOG%
 echo.
 echo Crash dumps if the window closes immediately:
-echo   %%LOCALAPPDATA%%\GSBT\winui_last_error.txt
+echo   %%AppData%%\Game Save Backup Tool\winui\logs\winui_last_error.txt
 echo   %%TEMP%%\gsbt_winui_last_error.txt
 echo.
 

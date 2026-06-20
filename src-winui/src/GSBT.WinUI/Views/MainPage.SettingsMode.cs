@@ -12,7 +12,6 @@ public partial class MainPage
 {
     private SettingsPanel? _settingsPanel;
     private bool _settingsOpen;
-    private bool _compressionEngineTeachingTipProgrammaticClose;
     private readonly SemaphoreSlim _settingsTransitionLock = new(1, 1);
     private int _settingsTransitionGeneration;
 
@@ -81,16 +80,6 @@ public partial class MainPage
 
             var generation = Interlocked.Increment(ref _settingsTransitionGeneration);
             _settingsOpen = false;
-
-            CloseCompressionEngineTeachingTipProgrammatically();
-            try
-            {
-                _settingsPanel?.CloseSevenZipGetVsWebsiteTeachingTipProgrammatically();
-            }
-            catch
-            {
-                // ignore
-            }
 
             try
             {
@@ -283,18 +272,10 @@ public partial class MainPage
             return;
         }
 
-        var previousTab = panel.SelectedTab;
-        if (previousTab == 1 && idx != 1)
-        {
-            CloseCompressionEngineTeachingTipProgrammatically();
-            panel.CloseSevenZipGetVsWebsiteTeachingTipProgrammatically();
-        }
-
         // Match keyboard path: update footer immediately so accent follows the click, not the 200ms panel cross-fade.
         SyncSettingsFooterTabs(idx);
         await panel.SelectTabAnimatedAsync(idx);
         SyncSettingsFooterTabs(panel.SelectedTab);
-        await MaybeShowCompressionEngineTeachingTipAsync();
     }
 
     private static bool TryParseFooterTabTag(object? tag, out int index)
@@ -346,15 +327,8 @@ public partial class MainPage
 
         var cur = panel.SelectedTab;
         var next = (cur + 1) % 3;
-        if (cur == 1 && next != 1)
-        {
-            CloseCompressionEngineTeachingTipProgrammatically();
-            panel.CloseSevenZipGetVsWebsiteTeachingTipProgrammatically();
-        }
-
         SyncSettingsFooterTabs(next);
         await panel.SelectTabAnimatedAsync(next);
-        await MaybeShowCompressionEngineTeachingTipAsync();
         args.Handled = true;
     }
 
@@ -368,15 +342,8 @@ public partial class MainPage
 
         var cur = panel.SelectedTab;
         var prev = (cur + 2) % 3;
-        if (cur == 1 && prev != 1)
-        {
-            CloseCompressionEngineTeachingTipProgrammatically();
-            panel.CloseSevenZipGetVsWebsiteTeachingTipProgrammatically();
-        }
-
         SyncSettingsFooterTabs(prev);
         await panel.SelectTabAnimatedAsync(prev);
-        await MaybeShowCompressionEngineTeachingTipAsync();
         args.Handled = true;
     }
 
@@ -413,61 +380,4 @@ public partial class MainPage
         await ExitSettingsAsync();
     }
 
-    private void CompressionEngineTeachingTip_Closed(TeachingTip sender, TeachingTipClosedEventArgs args)
-    {
-        var programmatic =
-            _compressionEngineTeachingTipProgrammaticClose
-            || args.Reason == TeachingTipCloseReason.Programmatic;
-        _compressionEngineTeachingTipProgrammaticClose = false;
-        if (!programmatic)
-        {
-            ViewModel.MarkCompressionSevenZipEngineTipDismissed();
-        }
-    }
-
-    private void CloseCompressionEngineTeachingTipProgrammatically()
-    {
-        try
-        {
-            if (!CompressionEngineTeachingTip.IsOpen)
-            {
-                return;
-            }
-
-            _compressionEngineTeachingTipProgrammaticClose = true;
-            CompressionEngineTeachingTip.IsOpen = false;
-        }
-        catch
-        {
-            _compressionEngineTeachingTipProgrammaticClose = false;
-        }
-    }
-
-    private async Task MaybeShowCompressionEngineTeachingTipAsync()
-    {
-        if (!_settingsOpen || _settingsPanel is null || _settingsPanel.SelectedTab != 1)
-        {
-            return;
-        }
-
-        await Task.Delay(480);
-        if (!_settingsOpen || _settingsPanel is null || _settingsPanel.SelectedTab != 1)
-        {
-            return;
-        }
-
-        if (ViewModel.ShouldShowCompressionSevenZipEngineTip() && !CompressionEngineTeachingTip.IsOpen)
-        {
-            try
-            {
-                CompressionEngineTeachingTip.Subtitle = ViewModel.CompressionSevenZipEngineTeachingTipIntro;
-                CompressionEngineTeachingTip.Target = SettingsTabCompress;
-                CompressionEngineTeachingTip.IsOpen = true;
-            }
-            catch
-            {
-                // ignore tip failures
-            }
-        }
-    }
 }

@@ -1,13 +1,22 @@
 namespace GSBT.Core.Common;
 
 /// <summary>
-/// Per-user GSBT data directories. Shared root is <c>%AppData%/GSBT</c>; each app flavor uses its own subfolder
-/// (e.g. <c>winui</c>, <c>pyqt</c>) so parallel installs do not collide.
+/// Per-user data directories. Roaming root is <c>%AppData%/Game Save Backup Tool</c>;
+/// WinUI files live in <c>winui</c>. Short internal folders use lowercase <c>gsbt</c>.
 /// </summary>
 public static class UserDataDir
 {
-    public const string GsbtAppName = "GSBT";
+    public const string AppFolderName = "Game Save Backup Tool";
+
+    /// <summary>Lowercase short subfolder for compact paths (sandbox sessions, etc.).</summary>
+    public const string ShortSubdirName = "gsbt";
+
     public const string WinUiSubdir = "winui";
+
+    /// <summary>Pre-v0.1.2 roaming folder name — migrated on first launch.</summary>
+    public const string LegacyAppFolderName = "GSBT";
+
+    private static readonly string[] RoamingLegacyFolderNames = ["GSBT", "GSBT_Lite", "GSBT_Light"];
 
     private static readonly string[] WinUiRootFilesToMigrate =
     [
@@ -25,10 +34,10 @@ public static class UserDataDir
         "notifications",
     ];
 
-    /// <summary>Return (and create) <c>%AppData%/GSBT</c>, migrating legacy folder names if present.</summary>
-    public static string GetAppUserDataDir(string appName = GsbtAppName, params string[] legacyNames)
+    /// <summary>Return (and create) <c>%AppData%/Game Save Backup Tool</c>, migrating legacy folder names if present.</summary>
+    public static string GetAppUserDataDir(string appName = AppFolderName, params string[] legacyNames)
     {
-        legacyNames = legacyNames is { Length: > 0 } ? legacyNames : ["GSBT_Lite", "GSBT_Light"];
+        legacyNames = legacyNames is { Length: > 0 } ? legacyNames : RoamingLegacyFolderNames;
         var baseDir = PlatformUserDataBase();
         var target = Path.Combine(baseDir, appName);
         Directory.CreateDirectory(target);
@@ -41,29 +50,78 @@ public static class UserDataDir
         return target;
     }
 
-    /// <summary>Return (and create) <c>%AppData%/GSBT/winui</c> for WinUI user-generated files.</summary>
+    /// <summary>Return (and create) <c>%AppData%/Game Save Backup Tool/winui</c> for WinUI user-generated files.</summary>
     public static string GetWinUiUserDataDir()
     {
         var root = GetAppUserDataDir();
         var target = Path.Combine(root, WinUiSubdir);
         Directory.CreateDirectory(target);
-        MigrateWinUiFromLegacyGsbtRoot(root, target);
+        MigrateWinUiFromLegacyAppRoot(root, target);
+        MigrateWinUiFromLegacyRoamingGsbtRoot(target);
         return target;
     }
+
+    /// <summary><c>%LocalAppData%/Game Save Backup Tool/gsbt</c> — short-path root for ephemeral WinUI data.</summary>
+    public static string GetLocalShortDataDir()
+    {
+        var target = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            AppFolderName,
+            ShortSubdirName);
+        Directory.CreateDirectory(target);
+        MigrateLegacyDirectory(
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                LegacyAppFolderName),
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                AppFolderName));
+        MigrateLegacyDirectory(
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                LegacyAppFolderName,
+                "SandboxSimulation"),
+            Path.Combine(target, "sandbox"));
+        return target;
+    }
+
+    /// <summary>Per-launch sandbox simulation session folders under the local short root.</summary>
+    public static string GetSandboxSimulationSessionsRoot() =>
+        Path.Combine(GetLocalShortDataDir(), "sandbox", "sessions");
 
     /// <summary>Absolute path to a file inside the WinUI user-data folder.</summary>
     public static string WinUiUserDataFile(string fileName) => Path.Combine(GetWinUiUserDataDir(), fileName);
 
-    private static void MigrateWinUiFromLegacyGsbtRoot(string gsbtRoot, string winUiDir)
+    private static void MigrateWinUiFromLegacyAppRoot(string appRoot, string winUiDir)
     {
         foreach (var name in WinUiRootFilesToMigrate)
         {
-            MigrateFileIfMissing(Path.Combine(gsbtRoot, name), Path.Combine(winUiDir, name));
+            MigrateFileIfMissing(Path.Combine(appRoot, name), Path.Combine(winUiDir, name));
         }
 
         foreach (var dirName in WinUiRootDirectoriesToMigrate)
         {
-            MigrateDirectoryIfMissing(Path.Combine(gsbtRoot, dirName), Path.Combine(winUiDir, dirName));
+            MigrateDirectoryIfMissing(Path.Combine(appRoot, dirName), Path.Combine(winUiDir, dirName));
+        }
+    }
+
+    /// <summary>One-time: WinUI files may have lived under <c>%AppData%/GSBT/winui</c> before the app folder rename.</summary>
+    private static void MigrateWinUiFromLegacyRoamingGsbtRoot(string winUiDir)
+    {
+        var legacyWinUi = Path.Combine(PlatformUserDataBase(), LegacyAppFolderName, WinUiSubdir);
+        if (!Directory.Exists(legacyWinUi))
+        {
+            return;
+        }
+
+        foreach (var name in WinUiRootFilesToMigrate)
+        {
+            MigrateFileIfMissing(Path.Combine(legacyWinUi, name), Path.Combine(winUiDir, name));
+        }
+
+        foreach (var dirName in WinUiRootDirectoriesToMigrate)
+        {
+            MigrateDirectoryIfMissing(Path.Combine(legacyWinUi, dirName), Path.Combine(winUiDir, dirName));
         }
     }
 
@@ -123,12 +181,17 @@ public static class UserDataDir
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share");
     }
 
+    internal static void MigrateLegacyDirectoryForTests(string legacyDir, string newDir) =>
+        MigrateLegacyDirectory(legacyDir, newDir);
+
     private static void MigrateLegacyDirectory(string legacyDir, string newDir)
     {
         if (!Directory.Exists(legacyDir))
         {
             return;
         }
+
+        Directory.CreateDirectory(newDir);
 
         foreach (var entry in Directory.EnumerateFileSystemEntries(legacyDir))
         {

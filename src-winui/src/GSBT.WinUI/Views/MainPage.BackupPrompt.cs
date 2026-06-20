@@ -54,9 +54,7 @@ public sealed partial class MainPage
             MaxWidth = 420
         };
 
-        var suggestedBackupDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            "GSBT_Backups");
+        var suggestedBackupDir = BackupPaths.SuggestedDefaultBackupPath();
         var pathBox = new TextBox
         {
             Text = suggestedBackupDir,

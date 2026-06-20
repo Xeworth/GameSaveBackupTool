@@ -1,18 +1,13 @@
 namespace GSBT.Core.Services;
 
-/// <summary>Resolved compression options (mirrors Python <c>CompressionOptions</c>).</summary>
+/// <summary>Resolved native 7-Zip compression options (bundled <c>7z.dll</c>).</summary>
 public sealed record CompressionOptions(
-    string Engine,
-    CompressionKind ZipKind,
-    int DeflateLevel,
-    string? SevenZipExe,
-    string SevenArchiveFormat,
     int SevenMx,
     int SevenMmt,
-    string SummaryLabel);
-
-public enum CompressionKind
+    bool SolidArchive,
+    string SummaryLabel)
 {
-    Stored,
-    Deflated
+    public const string EngineNative7z = "7z";
+
+    public string Engine => EngineNative7z;
 }

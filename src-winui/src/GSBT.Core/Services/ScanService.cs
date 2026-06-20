@@ -148,6 +148,11 @@ public sealed class ScanService
             saveData["platform"] = result.Platform;
         }
 
+        if (!string.IsNullOrWhiteSpace(result.InstallPath))
+        {
+            saveData["install_path"] = result.InstallPath;
+        }
+
         var resolvedViaRegistry = string.Equals(result.Source, "Ludusavi (registry)", StringComparison.OrdinalIgnoreCase);
 
         if (!string.IsNullOrWhiteSpace(result.SavePathRaw))

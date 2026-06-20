@@ -857,13 +857,14 @@ public sealed partial class MainViewModel
         var regOnly = CatalogUserAdded.CoerceBool(row.GetValueOrDefault("save_in_registry_only"));
         var rawPath = CatalogUserAdded.CoerceString(row.GetValueOrDefault("save_path"));
         var appId = CatalogUserAdded.CoerceString(row.GetValueOrDefault("steam_app_id"));
-        var platform = CatalogUserAdded.CoerceString(row.GetValueOrDefault("platform"))
-            ?? (!string.IsNullOrWhiteSpace(appId) ? "Steam" : "Unknown");
+        var isUser = CatalogUserAdded.IsUserAddedEntry(row);
+        var platform = ResolveCatalogPlatform(row, isUser, appId);
+        var installPath = CatalogUserAdded.CoerceString(row.GetValueOrDefault("install_path"));
 
         string? resolved = null;
         if (!regOnly && !string.IsNullOrWhiteSpace(rawPath))
         {
-            resolved = _catalogManager.ResolvePath(rawPath, null);
+            resolved = _catalogManager.ResolvePath(rawPath, installPath);
         }
 
         return new SaveScanResult
@@ -871,7 +872,7 @@ public sealed partial class MainViewModel
             RowId = gameName,
             Name = gameName,
             AppId = appId,
-            InstallPath = null,
+            InstallPath = installPath,
             Platform = platform,
             SavePathRaw = rawPath,
             SavePathResolved = resolved,
@@ -989,17 +990,107 @@ public sealed partial class MainViewModel
 
             if (TryCreateRowFromCatalog(catalogKey, row) is { } vm)
             {
+                ApplyDetectedPlatformToCatalogRow(g, catalogKey, row, vm);
                 Games.Add(vm);
                 SyncRowInDisplayed(vm);
             }
         }
     }
 
+    private void ApplyDetectedPlatformToCatalogRow(
+        GameRecord detected,
+        string catalogKey,
+        Dictionary<string, object?> row,
+        GameRowViewModel vm)
+    {
+        if (!GamePlatformHeuristics.IsKnownStorePlatform(detected.Platform))
+        {
+            return;
+        }
+
+        if (GamePlatformHeuristics.IsKnownStorePlatform(vm.Platform))
+        {
+            return;
+        }
+
+        vm.Platform = detected.Platform;
+        row["platform"] = detected.Platform;
+        if (!string.IsNullOrWhiteSpace(detected.InstallPath))
+        {
+            row["install_path"] = detected.InstallPath;
+        }
+
+        _catalogManager.AddOrUpdate(catalogKey, row);
+    }
+
+    private static string ResolveCatalogPlatform(
+        Dictionary<string, object?> row,
+        bool isUser,
+        string? steamAppId)
+    {
+        var platform = CatalogUserAdded.CoerceString(row.GetValueOrDefault("platform"));
+        if (!GamePlatformHeuristics.IsUnknownOrEmpty(platform))
+        {
+            return platform!;
+        }
+
+        if (isUser)
+        {
+            return "Custom";
+        }
+
+        if (!string.IsNullOrWhiteSpace(steamAppId))
+        {
+            return "Steam";
+        }
+
+        var installPath = CatalogUserAdded.CoerceString(row.GetValueOrDefault("install_path"));
+        var inferred = GamePlatformHeuristics.InferFromInstallPath(installPath);
+        if (!string.IsNullOrWhiteSpace(inferred))
+        {
+            return inferred;
+        }
+
+        return GamePlatformHeuristics.OtherLabel;
+    }
+
     private void FinalizeScanIntoGameList(IReadOnlyList<GameRecord> detected, IReadOnlyList<GameRecord> scannedForSaveLookup)
     {
         MergeSkippedDetectedCatalogRows(detected, scannedForSaveLookup);
+        BackfillDetectedPlatforms(detected);
         MergeUserAddedCatalogRowsIntoGames();
         ReapplyFilterFull();
+    }
+
+    private void BackfillDetectedPlatforms(IReadOnlyList<GameRecord> detected)
+    {
+        var byName = detected
+            .GroupBy(CatalogGameKeys.FromDetectedGame, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var vm in Games.Where(g => !g.IsUserAdded))
+        {
+            if (!byName.TryGetValue(vm.GameName, out var detectedGame))
+            {
+                continue;
+            }
+
+            if (!GamePlatformHeuristics.IsKnownStorePlatform(detectedGame.Platform))
+            {
+                continue;
+            }
+
+            if (GamePlatformHeuristics.IsKnownStorePlatform(vm.Platform))
+            {
+                continue;
+            }
+
+            vm.Platform = detectedGame.Platform;
+            if (_catalogManager.TryGetCatalogEntryInsensitive(vm.GameName, out var catalogKey, out var row))
+            {
+                ApplyDetectedPlatformToCatalogRow(detectedGame, catalogKey, row, vm);
+            }
+        }
     }
 
     private GameRowViewModel? TryCreateRowFromCatalog(string gameName, Dictionary<string, object?> row)
@@ -1015,8 +1106,7 @@ public sealed partial class MainViewModel
         var rawPath = CatalogUserAdded.CoerceString(row.GetValueOrDefault("save_path"));
         var isUser = CatalogUserAdded.IsUserAddedEntry(row);
         var steamAppId = CatalogUserAdded.CoerceString(row.GetValueOrDefault("steam_app_id"));
-        var platform = CatalogUserAdded.CoerceString(row.GetValueOrDefault("platform"))
-            ?? (isUser ? "Custom" : !string.IsNullOrWhiteSpace(steamAppId) ? "Steam" : "Unknown");
+        var platform = ResolveCatalogPlatform(row, isUser, steamAppId);
 
         string? resolved = null;
         if (!regOnly && !string.IsNullOrWhiteSpace(rawPath))

@@ -15,11 +15,6 @@
                 <ResourceDictionary Source="Themes/GsbtPyPalette.xaml" />
                 <ResourceDictionary Source="Themes/GsbtMenuFlyout.xaml" />
             </ResourceDictionary.MergedDictionaries>
-            <!-- All ComboBoxes: classic list drops below (footer MenuFlyouts stay separate). -->
-            <Style TargetType="ComboBox" BasedOn="{StaticResource DefaultComboBoxStyle}">
-                <Setter Property="controls:GsbtComboBoxChrome.ClassicDropdown" Value="True" />
-            </Style>
-            <Style TargetType="controls:GsbtComboBox" BasedOn="{StaticResource DefaultComboBoxStyle}" />
             <!-- Tray / Scan / Help menus: padded presenter + rounded item hover (see GsbtMenuFlyoutChrome). -->
             <Style
                 x:Key="GsbtMenuFlyoutPresenterStyle"

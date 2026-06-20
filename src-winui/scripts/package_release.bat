@@ -1,6 +1,6 @@
 @echo off
 rem Build all WinUI release assets for GitHub Releases:
-rem   1. self-contained publish\
+rem   1. self-contained publish\ (packed screensaver.7z, English locales only)
 rem   2. installer\output\GSBT_Setup_*.exe
 rem   3. installer\output\GSBT_Portable_*.zip
 cd /d "%~dp0\.."

@@ -1,7 +1,9 @@
 using System.Runtime.Versioning;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using GSBT.Core.Common;
 using GSBT.Core.Models;
+using Microsoft.Data.Sqlite;
 using Microsoft.Win32;
 
 namespace GSBT.Core.Services;
@@ -28,54 +30,76 @@ public sealed class WindowsGameDetector : IGameDetector
 
     public Task<IReadOnlyList<GameRecord>> DetectAllGamesAsync(CancellationToken cancellationToken = default)
     {
-        var steam = DetectSteamGames();
-        cancellationToken.ThrowIfCancellationRequested();
-
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var result = new List<GameRecord>();
 
-        foreach (var g in steam)
+        void AddDetected(GameRecord game)
         {
-            if (string.IsNullOrWhiteSpace(g.InstallPath))
+            if (string.IsNullOrWhiteSpace(game.InstallPath))
             {
-                continue;
+                return;
             }
 
-            var key = Path.GetFullPath(g.InstallPath.TrimEnd('\\', '/')).ToLowerInvariant();
+            var key = Path.GetFullPath(game.InstallPath.TrimEnd('\\', '/')).ToLowerInvariant();
             if (seen.Add(key))
             {
-                result.Add(g);
+                result.Add(game);
             }
         }
 
-        var registry = DetectRegistryGames();
-        foreach (var row in registry)
+        foreach (var g in DetectSteamGames())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var path = row.GetValueOrDefault("install_path");
-            var platform = row.GetValueOrDefault("platform") ?? "PC";
-            if (string.IsNullOrWhiteSpace(path))
+            AddDetected(g);
+        }
+
+        foreach (var g in DetectGogGames())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            AddDetected(g);
+        }
+
+        foreach (var g in DetectEpicGames())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            AddDetected(g);
+        }
+
+        foreach (var row in DetectRegistryGames())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var platform = row.GetValueOrDefault("platform") ?? GamePlatformHeuristics.OtherLabel;
+            if (GamePlatformHeuristics.IsStorePlatform(platform))
             {
                 continue;
             }
 
-            var nk = Path.GetFullPath(path.TrimEnd('\\', '/')).ToLowerInvariant();
-            if (!seen.Add(nk))
+            if (ToGameRecord(row) is { } game)
             {
-                continue;
+                AddDetected(game);
             }
-
-            // Python skips Steam/GOG/Epic from generic registry pass when deduping — handled by seen_paths.
-            var rid = row.GetValueOrDefault("app_id");
-            result.Add(new GameRecord(
-                row.GetValueOrDefault("name") ?? "Unknown",
-                string.IsNullOrWhiteSpace(rid) ? null : rid,
-                path,
-                platform,
-                GameDisplayName.CleanDisplayName(row.GetValueOrDefault("name") ?? "Unknown")));
         }
 
         return Task.FromResult<IReadOnlyList<GameRecord>>(result);
+    }
+
+    private static GameRecord? ToGameRecord(Dictionary<string, string> row)
+    {
+        var path = row.GetValueOrDefault("install_path");
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        var name = row.GetValueOrDefault("name") ?? "Unknown";
+        var rid = row.GetValueOrDefault("app_id");
+        var platform = row.GetValueOrDefault("platform") ?? GamePlatformHeuristics.OtherLabel;
+        return new GameRecord(
+            name,
+            string.IsNullOrWhiteSpace(rid) ? null : rid,
+            path,
+            platform,
+            GameDisplayName.CleanDisplayName(name));
     }
 
     private static Dictionary<string, string> ParseVdfFlat(string content)
@@ -241,43 +265,6 @@ public sealed class WindowsGameDetector : IGameDetector
         return NonGameTitleOrPublisher.IsMatch(blob);
     }
 
-    private static string DetectPlatformFromRegistry(string? displayName, string? publisher, string installLower)
-    {
-        var pub = (publisher ?? "").ToLowerInvariant();
-        var name = (displayName ?? "").ToLowerInvariant();
-        if (pub.Contains("gog", StringComparison.Ordinal) || installLower.Contains("gog", StringComparison.Ordinal))
-        {
-            return "GOG";
-        }
-
-        if (pub.Contains("epic", StringComparison.Ordinal) || installLower.Contains("epic", StringComparison.Ordinal))
-        {
-            return "Epic";
-        }
-
-        if (pub.Contains("ubisoft", StringComparison.Ordinal) || installLower.Contains("uplay", StringComparison.Ordinal))
-        {
-            return "Ubisoft";
-        }
-
-        if (pub.Contains("valve", StringComparison.Ordinal) || installLower.Contains("steamapps", StringComparison.Ordinal))
-        {
-            return "Steam";
-        }
-
-        if (pub.Contains("electronic arts", StringComparison.Ordinal) || installLower.Contains("origin", StringComparison.Ordinal))
-        {
-            return "EA";
-        }
-
-        if (pub.Contains("blizzard", StringComparison.Ordinal) || installLower.Contains("battle.net", StringComparison.Ordinal))
-        {
-            return "Battle.net";
-        }
-
-        return "PC";
-    }
-
     private static bool PathSuggestsNonGameSoftware(string installLower)
     {
         ReadOnlySpan<string> bad =
@@ -367,7 +354,8 @@ public sealed class WindowsGameDetector : IGameDetector
             }
         }
 
-        ReadOnlySpan<string> gameFolders = ["\\games\\", "\\game\\", "steamapps", "gog", "epic", "origin", "uplay", "xboxgames"];
+        ReadOnlySpan<string> gameFolders =
+            ["\\games\\", "\\game\\", "steamapps", "gog", "galaxy", "epic", "origin", "uplay", "xboxgames"];
         foreach (var folder in gameFolders)
         {
             if (installLower.Contains(folder, StringComparison.OrdinalIgnoreCase))
@@ -462,6 +450,147 @@ public sealed class WindowsGameDetector : IGameDetector
         return DedupeSteamSharedInstallFolder(found);
     }
 
+    private List<GameRecord> DetectGogGames()
+    {
+        var fromDb = TryDetectGogGamesFromGalaxyDatabase();
+        if (fromDb.Count > 0)
+        {
+            return fromDb;
+        }
+
+        return DetectRegistryGames()
+            .Where(row => string.Equals(row.GetValueOrDefault("platform"), "GOG", StringComparison.OrdinalIgnoreCase))
+            .Select(ToGameRecord)
+            .Where(g => g is not null)
+            .Cast<GameRecord>()
+            .ToList();
+    }
+
+    private List<GameRecord> DetectEpicGames() =>
+        DetectRegistryGames()
+            .Where(row => string.Equals(row.GetValueOrDefault("platform"), "Epic", StringComparison.OrdinalIgnoreCase))
+            .Select(ToGameRecord)
+            .Where(g => g is not null)
+            .Cast<GameRecord>()
+            .ToList();
+
+    private static List<GameRecord> TryDetectGogGamesFromGalaxyDatabase()
+    {
+        var found = new List<GameRecord>();
+        foreach (var dbPath in GetGogGalaxyDatabasePaths())
+        {
+            if (!File.Exists(dbPath))
+            {
+                continue;
+            }
+
+            try
+            {
+                using var connection = new SqliteConnection($"Data Source={dbPath};Mode=ReadOnly");
+                connection.Open();
+                using var tableCmd = connection.CreateCommand();
+                tableCmd.CommandText =
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%install%'";
+                using var tableReader = tableCmd.ExecuteReader();
+                var installTables = new List<string>();
+                while (tableReader.Read())
+                {
+                    installTables.Add(tableReader.GetString(0));
+                }
+
+                foreach (var tableName in installTables)
+                {
+                    try
+                    {
+                        using var cmd = connection.CreateCommand();
+                        cmd.CommandText = $"SELECT releaseKey, basePath FROM \"{tableName.Replace("\"", "\"\"")}\" WHERE basePath IS NOT NULL";
+                        using var reader = cmd.ExecuteReader();
+                        while (reader.Read())
+                        {
+                            var releaseKey = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+                            var basePath = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+                            if (string.IsNullOrWhiteSpace(basePath) || !Directory.Exists(basePath))
+                            {
+                                continue;
+                            }
+
+                            var gameName = TryResolveGogGameTitle(connection, releaseKey) ?? releaseKey;
+                            found.Add(new GameRecord(
+                                gameName,
+                                null,
+                                basePath.TrimEnd('\\'),
+                                "GOG",
+                                GameDisplayName.CleanDisplayName(gameName)));
+                        }
+                    }
+                    catch
+                    {
+                        // Galaxy schema varies between versions — try next table.
+                    }
+                }
+
+                if (found.Count > 0)
+                {
+                    return found;
+                }
+            }
+            catch
+            {
+                // try next db path
+            }
+        }
+
+        return found;
+    }
+
+    private static IEnumerable<string> GetGogGalaxyDatabasePaths()
+    {
+        yield return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            @"GOG.com\Galaxy\storage\galaxy-2.0.db");
+        yield return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            @"GOG.com\Galaxy\storage\galaxy-2.0.db");
+    }
+
+    private static string? TryResolveGogGameTitle(SqliteConnection connection, string releaseKey)
+    {
+        if (string.IsNullOrWhiteSpace(releaseKey))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText =
+                "SELECT value FROM GamePieces WHERE releaseKey=$key "
+                + "AND gamePieceTypeId=(SELECT id FROM GamePieceTypes WHERE type='title') LIMIT 1";
+            cmd.Parameters.AddWithValue("$key", releaseKey);
+            var raw = cmd.ExecuteScalar() as string;
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return null;
+            }
+
+            if (raw.StartsWith('{'))
+            {
+                using var doc = JsonDocument.Parse(raw);
+                if (doc.RootElement.TryGetProperty("title", out var title)
+                    && title.ValueKind == JsonValueKind.String)
+                {
+                    return title.GetString();
+                }
+            }
+
+            return raw;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>Merge rows that share the same install directory (DLC IDs); keep lowest numeric app id.</summary>
     private static List<GameRecord> DedupeSteamSharedInstallFolder(List<GameRecord> games)
     {
@@ -548,6 +677,7 @@ public sealed class WindowsGameDetector : IGameDetector
                         var displayName = sub.GetValue("DisplayName") as string;
                         var publisher = sub.GetValue("Publisher") as string;
                         var installLocation = sub.GetValue("InstallLocation") as string;
+                        var uninstallString = sub.GetValue("UninstallString") as string;
                         if (string.IsNullOrWhiteSpace(displayName) || string.IsNullOrWhiteSpace(installLocation))
                         {
                             continue;
@@ -559,7 +689,11 @@ public sealed class WindowsGameDetector : IGameDetector
                             continue;
                         }
 
-                        var platform = DetectPlatformFromRegistry(displayName, publisher, installLocation.ToLowerInvariant());
+                        var platform = GamePlatformHeuristics.DetectFromRegistry(
+                            displayName,
+                            publisher,
+                            installLocation,
+                            uninstallString);
                         found.Add(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                         {
                             ["name"] = displayName,

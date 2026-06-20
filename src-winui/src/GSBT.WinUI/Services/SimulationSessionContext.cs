@@ -4,7 +4,7 @@ namespace GSBT.WinUI.Services;
 public static class SimulationSessionContext
 {
     /// <summary>Recommended backup folder name under each simulation session (on-disk folder name).</summary>
-    public const string SessionBackupFolderName = "GSBT_Backup_Sim";
+    public const string SessionBackupFolderName = "gsbt-backup-sim";
 
     public static string? SessionDirectory { get; private set; }
 

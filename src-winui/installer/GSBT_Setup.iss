@@ -1,13 +1,15 @@
 ; GSBT — Game Save Backup Tool (WinUI 3)
 ; Build: installer\build_installer.bat (after scripts\publish_release.bat)
 ; Requires Inno Setup 6.5.4+ for WizardStyle=modern dynamic (system light/dark).
-; gsbt-sandbox.exe is a separate publish with gsbt-s.ico embedded (not a hard link).
+; Self-contained publish (.NET 8 + Windows App SDK bundled beside gsbt.exe).
+; Per-user install under %LocalAppData% (no admin) — same pattern as PowerToys-style tools.
 
 #define MyAppName "Game Save Backup Tool"
-#define MyAppShortName "GSBT"
+#define MyAppFolderName "Game Save Backup Tool"
+#define MyAppRegKey "Game Save Backup Tool"
 #define MyAppExe "gsbt.exe"
 #define MyAppSandboxExe "gsbt-sandbox.exe"
-#define MyAppVersion "0.0.2.260606"
+#define MyAppVersion "0.1.3.260619"
 #define MyAppPublisher "Xeworth"
 #define MyAppURL "https://github.com/Xeworth/GameSaveBackupTool"
 #define MyAppId "{{A7B3C4D5-E6F7-4890-ABCD-EF1234567890}"
@@ -25,7 +27,7 @@ AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 AppComments=Self-contained WinUI backup tool for game saves. .NET 8 and Windows App SDK are bundled — no separate runtime install required.
-DefaultDirName={autopf}\{#MyAppShortName}
+DefaultDirName={localappdata}\{#MyAppFolderName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 LicenseFile=..\..\LICENSE
@@ -35,7 +37,8 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern dynamic includetitlebar
 ShowLanguageDialog=no
-PrivilegesRequired=admin
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 SetupIconFile=..\branding\gsbt.ico
@@ -64,8 +67,8 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Filename: "{app}\{#MyAppExe}"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent unchecked
 
 [Registry]
-Root: HKLM; Subkey: "Software\{#MyAppShortName}"; ValueType: string; ValueName: "InstallDir"; ValueData: "{app}"; Flags: uninsdeletekeyifempty
-Root: HKLM; Subkey: "Software\{#MyAppShortName}"; ValueType: string; ValueName: "Version"; ValueData: "{#MyAppVersion}"
+Root: HKCU; Subkey: "Software\{#MyAppRegKey}"; ValueType: string; ValueName: "InstallDir"; ValueData: "{app}"; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\{#MyAppRegKey}"; ValueType: string; ValueName: "Version"; ValueData: "{#MyAppVersion}"
 
 [Code]
 function SandboxEntryInstalled(const AppDir: String): Boolean;
@@ -96,14 +99,14 @@ begin
         'You can still use gsbt.exe with the -s flag.',
         mbError, MB_OK)
     else
-      RegWriteStringValue(HKLM, 'Software\{#MyAppShortName}', 'SandboxInstalled', '1');
+      RegWriteStringValue(HKCU, 'Software\{#MyAppRegKey}', 'SandboxInstalled', '1');
   end;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usPostUninstall then
-    RegDeleteKeyIncludingSubkeys(HKLM, 'Software\{#MyAppShortName}');
+    RegDeleteKeyIncludingSubkeys(HKCU, 'Software\{#MyAppRegKey}');
   if CurUninstallStep = usUninstall then
     TryRemoveSandboxEntryFiles(ExpandConstant('{app}'));
 end;

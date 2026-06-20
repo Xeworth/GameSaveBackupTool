@@ -19,10 +19,9 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ### Security (proportionate for v0.1)
 
-- [ ] **7-Zip installer hash** — verify SHA-256 of pinned download before `Process.Start` (`SevenZipDownloadInstall.cs`)
+- [x] **Bundled `7z.dll`** — native compression ships beside `gsbt.exe`; license in [THIRD_PARTY.md](../../../THIRD_PARTY.md) (removed external 7-Zip installer flow)
 - [ ] **reg.exe arguments** — use `ArgumentList` or strict subkey validation (`RegistrySaveBackupService.cs`)
 - [ ] **Re-validate registry targets** before auto-backup from catalog JSON
-- [ ] **Delete temp 7-Zip installer** in `finally` after install (`MainViewModel.InstallSevenZipFromOfficialSiteAsync`)
 
 ### Performance (biggest UX wins)
 
@@ -34,7 +33,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 - [ ] **Remove unused packages** — `Microsoft.Web.WebView2`, `Serilog`, `Microsoft.Extensions.Logging.Abstractions`
 - [ ] **Pin NuGet versions** in `src/GSBT.WinUI/GSBT.WinUI.csproj` and `src/GSBT.Core/GSBT.Core.csproj` (replace `1.*`, `8.*`, `9.*`)
-- [ ] **Release smoke test** — self-contained `win-x64` publish: scan, backup, compress, tray, settings save
+- [ ] **Release smoke test** — self-contained `win-x64` publish: scan, backup, compress, tray, settings save; installer on a clean VM (no separate .NET install)
 - [ ] **Disable `PublishTrimmed`** if smoke test fails; document in README
 - [ ] **Gate sandbox seed assets** — `data/sandbox_simulation` only in dev publish profile (optional; assets are small today)
 - [x] **Set GitHub URL** in `AppAboutInfo.SourceRepositoryUrl` and README release links
@@ -46,6 +45,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] `PRIVACY.md`
 - [x] `CHANGELOG.md`
 - [x] `CONTRIBUTING.md`
+- [x] [THIRD_PARTY.md](../../../THIRD_PARTY.md) — `7z.dll` / SharpSevenZip LGPL attribution
 - [x] [src-winui/docs/SANDBOX.md](../../../src-winui/docs/SANDBOX.md)
 - [x] Repo layout (monorepo: `src-winui/`, edition stubs; deprecated root Python removed)
 
@@ -58,7 +58,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [ ] **Game folder name collision** — unique backup dir key or user warning before retention prune
 - [ ] **Registry backup checkpoints** — manifest for `.reg` exports like folder backups
 - [ ] **Junction / reparse point** guard on copy and compress
-- [ ] **Restrict `compression_7z_path`** to trusted locations or publisher check
+- [x] ~~**Restrict `compression_7z_path`**~~ — N/A; compression uses bundled `7z.dll` only
 - [ ] **Optional separate sandbox release** zip (~same runtime; without sandbox simulation assets)
 
 ---
@@ -75,7 +75,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## Known limitations (document in release notes)
 
-- Self-contained WinUI build is large (~150–250 MB) — expected for unpackaged WASDK
+- Self-contained publish: binaries under `%LocalAppData%\Game Save Backup Tool\` (~180–220 MB unpacked). Locale folders pruned to `en-us`. Screen saver in `data\screensaver.7z`.
 - Ludusavi manifest refresh requires internet; bundled manifest works offline
 - HKLM registry exports may need elevation
 - Sanitized game names can collide in edge cases (see audit)
@@ -96,13 +96,13 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## Release smoke test script (manual)
 
-1. Fresh `%AppData%\GSBT` or backup existing
-2. Scan → games appear; filter modes work
+1. Fresh `%AppData%\Game Save Backup Tool` or backup existing
+2. Scan → games appear; filter modes work; GOG / Other platform labels where expected
 3. Backup one game + bulk backup; retention folder created
-4. Compress backup root (ZIP and/or 7z if installed)
+4. Compress backup root (`.7z` via bundled `7z.dll`; taskbar progress during compress)
 5. Auto-backup on + edit save file → backup fires
 6. Minimize to tray; tray menu Show / Backup / Compress / Quit
 7. Settings save survives restart
-8. F1 shortcuts, F11 About, F12 Diagnostics
+8. F1 shortcuts, F11 About; F12 Diagnostics (sandbox `-s` only)
 
 Installer build steps: [../../../src-winui/installer/README.md](../../../src-winui/installer/README.md).

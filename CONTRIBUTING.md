@@ -41,3 +41,5 @@ Optional developer UI is documented in **[src-winui/docs/SANDBOX.md](src-winui/d
 ## License
 
 By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+
+Bundled third-party components (e.g. `7z.dll`) are documented in [THIRD_PARTY.md](THIRD_PARTY.md).

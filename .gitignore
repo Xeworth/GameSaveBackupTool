@@ -60,9 +60,9 @@ installer/output/
 **/settings.json
 !**/Properties/launchSettings.json
 
-# Personal dev notes (local only)
-todo.txt
-rename-repo-folder.bat
+# Local scratch / session notes (never commit)
+new-compression.txt
+**/New-Session-Implementations.txt
 
 # Crash dumps
 *.dmp

@@ -5,7 +5,22 @@ Extract this folder anywhere (USB drive, D:\Tools, etc.) and run:
 
   gsbt.exe
 
-No installer required. .NET 8 and the Windows App SDK are already bundled.
+No installer required. This build is self-contained (.NET 8 + Windows App SDK bundled).
+
+Prerequisite: none
+------------------
+No separate .NET or runtime install is required.
+
+The GSBT Setup installer installs the same files under:
+
+  %LocalAppData%\Game Save Backup Tool\
+
+(per-user, no admin — like PowerToys-style tools).
+
+Screen saver media
+------------------
+Bundled as data\screensaver.7z (not loose video/audio files). On first use the app
+extracts media to your user profile cache under Game Save Backup Tool.
 
 Sandbox (optional developer mode)
 ---------------------------------
@@ -14,11 +29,10 @@ Sandbox (optional developer mode)
 
 Settings and data
 -----------------
-Same as the installed edition:
-  %AppData%\GSBT\winui\
+  %AppData%\Game Save Backup Tool\winui\
 
 Uninstall
 ---------
-Delete this folder. Your settings in %AppData%\GSBT remain until you remove them.
+Delete this folder. Your settings in %AppData%\Game Save Backup Tool remain until you remove them.
 
 Project: https://github.com/Xeworth/GameSaveBackupTool

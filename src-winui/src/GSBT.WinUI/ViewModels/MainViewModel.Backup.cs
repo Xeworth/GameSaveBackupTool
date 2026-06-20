@@ -49,10 +49,7 @@ public sealed partial class MainViewModel
         var ok = 0;
         var fail = 0;
         var cancelled = false;
-        _footerCancelSlot = FooterCancelSlot.Backup;
-        _operationCts = new CancellationTokenSource();
-        IsBusy = true;
-        OnPropertyChanged(nameof(CanCancelOperation));
+        BeginCancellableOperation(FooterCancelSlot.Backup);
         try
         {
             var token = _operationCts.Token;
@@ -159,10 +156,7 @@ public sealed partial class MainViewModel
         }
         finally
         {
-            _footerCancelSlot = FooterCancelSlot.None;
-            _operationCts.Dispose();
-            _operationCts = null;
-            OnPropertyChanged(nameof(CanCancelOperation));
+            EndCancellableOperation();
             ScanProgress = 0;
             IsBusy = false;
         }
@@ -254,132 +248,8 @@ public sealed partial class MainViewModel
     public CompressionOptions GetCompressionOptionsForBackupRun() =>
         CompressionOptionsResolver.FromSettings(
             (k, d) => _settings.Get(k, d),
+            (k, d) => _settings.Get(k, d) ?? string.Empty,
             (k, d) => _settings.Get(k, d));
-
-    /// <summary>
-    /// Settings ÔÇ£is 7-Zip installed?ÔÇØ hint ÔÇö simulation modes override real detection for the Compression UI only.
-    /// Actual compress still resolves a real <c>7z.exe</c> path.
-    /// </summary>
-    public bool HasSevenZipForSettingsHint()
-    {
-        if (_overrides.SevenZipUiOverride == SandboxSevenZipUiMode.SimulatePresent)
-        {
-            return true;
-        }
-
-        if (_overrides.SevenZipUiOverride == SandboxSevenZipUiMode.SimulateAbsent)
-        {
-            return false;
-        }
-
-        return ResolveSevenZipForOperations() is not null;
-    }
-
-    public string? ResolveSevenZipForOperations()
-    {
-        if (_overrides.SevenZipUiOverride == SandboxSevenZipUiMode.SimulatePresent)
-        {
-            return SevenZipLocator.FindSevenZipExecutable();
-        }
-
-        if (_overrides.SevenZipUiOverride == SandboxSevenZipUiMode.SimulateAbsent)
-        {
-            return null;
-        }
-
-        var custom = (_settings.Get("compression_7z_path", string.Empty) ?? string.Empty).Trim().Trim('"');
-        return SevenZipLocator.ResolveSevenZipExe(custom);
-    }
-
-    /// <summary>One or two sentences for Settings ÔåÆ Compression (ÔÇ£7-Zip on this PCÔÇØ).</summary>
-    public string GetSevenZipInstallStatusUiText()
-    {
-        if (_overrides.SevenZipUiOverride == SandboxSevenZipUiMode.SimulatePresent)
-        {
-            return "7-Zip: Installed (simulated for this window).";
-        }
-
-        if (_overrides.SevenZipUiOverride == SandboxSevenZipUiMode.SimulateAbsent)
-        {
-            return "7-Zip: Not installed (simulated for this window).";
-        }
-
-        var custom = (_settings.Get("compression_7z_path", string.Empty) ?? string.Empty).Trim().Trim('"');
-        var resolved = ResolveSevenZipForOperations();
-        if (resolved is not null)
-        {
-            return $"7-Zip: Installed ({resolved}).";
-        }
-
-        if (custom.Length > 0)
-        {
-            return "7-Zip: Custom path is set but not used (only Program Files\\7-Zip\\7z.exe is accepted). Clear the path or use Get 7-Zip.";
-        }
-
-        return "7-Zip: Not installed.";
-    }
-
-    /// <summary>
-    /// Download pinned 7-Zip + silent install. Logs to <see cref="SandboxLogHub"/> category <c>7zip</c> ÔÇö open Sandbox monitor Live log when testing with <c>-sandbox</c>.
-    /// </summary>
-    public async Task<string> InstallSevenZipFromOfficialSiteAsync(IProgress<(int percent, string? text)>? ui, CancellationToken cancellationToken)
-    {
-        void Log(string m) => _sandboxLog.Log("7zip", m);
-        if (App.IsSandboxSimulationChild)
-        {
-            Log("=== Get 7-Zip: skipped in simulation window (no installer download) ===");
-            return "7-Zip download and install are disabled in the simulation window. Use the full app to install 7-Zip, or use Sandbox monitor ÔåÆ Simulated states to override ÔÇ£installed / not installedÔÇØ for the Compression UI.";
-        }
-
-        Log("=== Get 7-Zip: start (category 7zip; use -sandbox + monitor to watch) ===");
-        try
-        {
-            var (_, fileName) = SevenZipDownloadInstall.PinnedInstallerUrlAndName();
-            var tmp = Path.Combine(Path.GetTempPath(), "gsbt_" + fileName);
-            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(8) };
-            await SevenZipDownloadInstall.DownloadInstallerAsync(
-                    http,
-                    tmp,
-                    new Progress<(long done, long? total)>(v =>
-                    {
-                        if (v.total is > 0)
-                        {
-                            var pct = (int)(100 * v.done / v.total.Value);
-                            ui?.Report((pct, $"DownloadingÔÇª {pct}%"));
-                        }
-                    }),
-                    cancellationToken,
-                    Log)
-                .ConfigureAwait(false);
-
-            ui?.Report((95, "Running installer (UAC may appear)ÔÇª"));
-            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "7-Zip");
-            var (code, mode) = await SevenZipDownloadInstall.InstallSilentAsync(tmp, dir, Log).ConfigureAwait(false);
-            if (code != 0)
-            {
-                return $"7-Zip installer exited with code {code} ({mode}). See Live log category 7zip.";
-            }
-
-            var found = await SevenZipDownloadInstall.WaitForSevenZipExeAsync(TimeSpan.FromSeconds(90), TimeSpan.FromMilliseconds(350), Log).ConfigureAwait(false);
-            if (found is null)
-            {
-                return "Install finished but 7z.exe was not detected in time. Try Compress again or set path to 7z.exe.";
-            }
-
-            _settings.Set("compression_7z_path", string.Empty);
-            Log($"=== Get 7-Zip: done ÔåÆ {found} ===");
-            return $"7-Zip installed: {found}";
-        }
-        catch (OperationCanceledException)
-        {
-            return "7-Zip download/install cancelled.";
-        }
-        catch (Exception ex)
-        {
-            Log("ERROR: " + ex.Message);
-            return $"7-Zip install failed: {ex.Message}";
-        }
-    }
 
     /// <summary>Effective backup root for compress-on-exit and benchmarks (respects sandbox ÔÇ£no pathÔÇØ).</summary>
     public string? GetEffectiveBackupRootForCompressPrompt()
@@ -431,31 +301,34 @@ public sealed partial class MainViewModel
         }
 
         var opts = GetCompressionOptionsForBackupRun();
-        if (opts.Engine == "7z" && string.IsNullOrEmpty(opts.SevenZipExe))
+        if (!SevenZipNativeLibrary.IsAvailable)
         {
-            return ("The compression preset uses 7-Zip, but 7z.exe was not found. Install 7-Zip, use Get 7-Zip in Settings ÔåÆ Compression, or set path to 7z.exe.", null);
+            var err = SevenZipNativeLibrary.LastError ?? "7z.dll is not loaded.";
+            return ($"Compression engine unavailable: {err}", null);
         }
 
         var stamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-        var ext = opts.Engine == "7z"
-            ? (opts.SevenArchiveFormat is "zip" or "7z" ? opts.SevenArchiveFormat : "7z")
-            : "zip";
-        var archiveName = $"Backups_{stamp}.{ext}";
+        var archiveName = $"Backups_{stamp}.7z";
         var outPath = Path.Combine(backupRoot, archiveName);
 
-        _footerCancelSlot = FooterCancelSlot.Compress;
-        _operationCts = new CancellationTokenSource();
-        IsBusy = true;
-        OnPropertyChanged(nameof(CanCancelOperation));
+        BeginCancellableOperation(FooterCancelSlot.Compress);
+        CompressionProgressSimulator? progressSim = null;
         try
         {
-            var token = _operationCts.Token;
+            var token = _operationCts!.Token;
             try
             {
-                var progress = new Progress<int>(pct =>
-                    _dispatcher.TryEnqueue(() => ScanProgress = pct));
+                progressSim = new CompressionProgressSimulator(
+                    opts.SevenMx,
+                    pct => ScanProgress = pct,
+                    _dispatcher);
+                progressSim.Start();
+                var progress = new Progress<int>(pct => progressSim.SetTarget(pct));
                 _sandboxLog.Log("compress", $"Start {opts.SummaryLabel} ÔåÆ {archiveName}");
                 _compressionActivity.Clear();
+                Action<CompressionGameTrackUpdate>? reportGameTrack = opts.SolidArchive
+                    ? null
+                    : update => EnqueueUi(() => _compressionActivity.ApplyTrackUpdate(update));
                 var result = await Task.Run(
                         async () =>
                             await _compression.CompressBackupFolderAsync(
@@ -464,12 +337,13 @@ public sealed partial class MainViewModel
                                     progress,
                                     msg => _sandboxLog.Log("compress", msg),
                                     folder => _compressionActivity.SetCurrentGameFolder(folder),
+                                    reportGameTrack,
                                     token,
                                     subfolder,
                                     sanitizedFilter)
                                 .ConfigureAwait(false))
                     .ConfigureAwait(true);
-                ScanProgress = 100;
+                progressSim.Complete();
                 if (!result.Success)
                 {
                     try
@@ -516,11 +390,9 @@ public sealed partial class MainViewModel
         }
         finally
         {
+            progressSim?.Dispose();
             _compressionActivity.Clear();
-            _footerCancelSlot = FooterCancelSlot.None;
-            _operationCts.Dispose();
-            _operationCts = null;
-            OnPropertyChanged(nameof(CanCancelOperation));
+            EndCancellableOperation();
             IsBusy = false;
             _dispatcher.TryEnqueue(() => ScanProgress = 0);
         }

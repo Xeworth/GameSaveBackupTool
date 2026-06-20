@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace GSBT.WinUI.Common;
 
-/// <summary>User-visible errors and crash logs when startup fails (installer / Program Files launches).</summary>
+/// <summary>User-visible errors and crash logs when startup fails (installer / LocalAppData launches).</summary>
 internal static class StartupFailureReporter
 {
     private const uint MbIconError = 0x00000010;
@@ -59,11 +59,7 @@ internal static class StartupFailureReporter
 
     public static void ShowErrorDialog(Exception ex, string stage)
     {
-        var logHint = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "GSBT",
-            "logs",
-            "winui_last_error.txt");
+        var logHint = AppPaths.WinUiCrashLogPath;
         var text =
             "Game Save Backup Tool could not start.\n\n" +
             $"Stage: {stage}\n" +

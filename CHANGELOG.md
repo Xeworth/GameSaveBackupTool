@@ -1,42 +1,45 @@
 # Changelog
 
-All notable changes to **Game Save Backup Tool (GSBT)** are documented here.
+All notable changes to Game Save Backup Tool are documented here.
 
-Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).  
+Versioning: `0.MINOR.PATCH.YYMMDD` (see `AppAboutInfo.VersionDisplay`).
 
-## [Unreleased]
+## [0.1.3.260619] — 2026-06-19
 
-## [0.0.2.260606] - 2026-06-06
+### Packaging & install
 
-First public WinUI release.
+- **Per-user install** under `%LocalAppData%\Game Save Backup Tool\` (no admin; PowerToys-style layout). Start Menu shortcuts; optional desktop icons.
+- **Self-contained publish** — .NET 8 + Windows App SDK bundled; no separate runtime install required.
+- **Screen saver media** packed as `data\screensaver.7z` (not loose mp4/ogg in the install folder). Extracted to user cache on first use.
+- **English-only locales** in release publish (`en-us` only; WinApp SDK MUI folders pruned after build).
+- Portable zip (`GSBT_Portable_*.zip`) — same self-contained layout; extract anywhere and run `gsbt.exe`.
 
-### Added
+### Compression screen saver
 
-- WinUI 3 port: scan, catalog, backup, compression, settings, tray, auto-backup
-- Click column headers to sort the game list (with selection preserved across sorts)
-- `gsbt-sandbox.exe` shipped in install and portable packages (hard link or copy beside `gsbt.exe`)
-- Inno Setup installer with system light/dark wizard theme (`WizardStyle=modern dynamic`)
-- Portable zip (`GSBT_Portable_*.zip`) for extract-and-run use
-- User data under `%AppData%\GSBT\winui\` (isolated from other editions)
-- Trusted 7-Zip discovery under Program Files; 5 MB cap on official installer download
-- Taskbar progress + flash on backup/compress complete
-- App icons: `gsbt.ico` / `gsbt-s.ico` for main and sandbox sessions
-- `scripts/publish_release.bat`, `scripts/package_release.bat`, publish validation
-- Ludusavi manifest (bundled + optional GitHub refresh)
-- Core unit tests (`tests/GSBT.Core.Tests`)
-- Release documentation: `README.md`, `LICENSE`, `PRIVACY.md`
+- Screen saver IDs 1–4 with full-length video/audio tracks and themed progress bars.
+- End-of-track rotation with fade transitions (video, audio, progress theme).
+- Sandbox preview combo for IDs 1–4 and rotate mode.
 
-### Changed
+### Compression
 
-- Scan dedup and catalog restore fixes (installed games no longer vanish after scan)
-- Footer **Tools** → **Help**; shortcuts dialog trimmed to hotkeys only
-- Tray context menu: compact 28px items
-- **Monorepo layout:** `src-winui/` (C#), edition stubs for PyQt/TUI
+- Native `.7z` via bundled `7z.dll` (SharpSevenZip); solid archiving disabled for cancel reliability.
+- Compression level slider shows MX tier labels.
 
-### Removed
+### UI polish (0.1.3)
 
-- Deprecated root Python app — superseded by WinUI port
+- Screen saver mute/exit hover consistent in light and dark themes; video frame uses `GsbtBorderBrush`.
+- Diagnostics available only in sandbox (`-s`); removed from main app Help menu.
+- Screen saver audio volume lowered; temporary resize allowed during screen saver when resolution is locked.
 
-## [0.0.1.250605] - (superseded, never released)
 
-Internal pre-release version with incorrect date suffix. Use **0.0.2.260606** instead.
+### Docs
+
+- Installer, portable, and third-party attribution docs updated for new layout.
+- Vendored InnoDependencyInstaller kept optional (not used in setup).
+
+## [0.1.2] — earlier
+
+- WinUI 3 native edition, Ludusavi manifest, backup retention, tray, auto-backup, sandbox dev mode (`-s`).
+
+[0.1.3.260619]: https://github.com/Xeworth/GameSaveBackupTool/compare/v0.1.2...v0.1.3.260619

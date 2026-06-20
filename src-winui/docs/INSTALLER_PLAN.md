@@ -6,7 +6,7 @@ Owner intent (May 2026). Use this when implementing Inno Setup / WiX / MSIX and 
 
 | Entry | Installs | Start Menu |
 |-------|----------|------------|
-| **GSBT Setup** | Full `publish\` output under e.g. `Program Files\GSBT\` | **Game Save Backup Tool** → `gsbt.exe` |
+| **GSBT Setup** | Full `publish\` output under `%LocalAppData%\Game Save Backup Tool\` | **Game Save Backup Tool** → `gsbt.exe` |
 | *(always included)* | Hard link `gsbt-sandbox.exe` → `gsbt.exe` (no second runtime, no size difference) | **GSBT Sandbox** → `gsbt-sandbox.exe`, icon `gsbt-s.ico` |
 
 - **Main works alone at runtime** — normal backup/compress/tray without `-s`; sandbox UI stays hidden.
@@ -22,7 +22,7 @@ Equivalent to `launch_sandbox.bat` / `GSBT_SANDBOX=1`:
 2. **Sandbox monitor** — `SandboxMonitorWindow` alongside.
 3. **Theme** — `ThemeBridge` syncs light/dark across both; changing theme in Main updates monitor chrome.
 
-Regression test before any sandbox-only shortcut ships: both windows visible, theme toggle affects both, catalog/settings use real `%AppData%\GSBT` (not orphan monitor).
+Regression test before any sandbox-only shortcut ships: both windows visible, theme toggle affects both, catalog/settings use real `%AppData%\Game Save Backup Tool\winui` (not orphan monitor).
 
 ## Icons (`src-winui/branding/`)
 
@@ -35,9 +35,9 @@ Regression test before any sandbox-only shortcut ships: both windows visible, th
 
 ## File count in install directory
 
-Users should interact via Start Menu, not by browsing `Program Files\GSBT\`.
+Users should interact via Start Menu, not by browsing `%LocalAppData%\Game Save Backup Tool\`.
 
-- **v0.1:** Self-contained folder publish (trim **off** — trimmed build breaks JSON/WinUI).
+- **v0.1+:** Self-contained .NET publish (`SelfContained=true`); Windows App SDK bundled (`WindowsAppSDKSelfContained`). Trim **off**. Locale folders pruned to `en-us` after publish. Screen saver media in `data\screensaver.7z` (not loose files). Per-user install in LocalAppData (no admin).
 - **Sandbox add-on:** Prefer shortcut-only; do not duplicate DLLs/locale folders.
 - **Later (optional):** `PublishSingleFile`, MSIX, or `SatelliteResourceLanguages=en` to shrink visible clutter.
 
@@ -59,7 +59,7 @@ Main installer copies that tree. Sandbox entry is `gsbt-sandbox.exe` (hard link 
 
 Single installer — see [`installer/README.md`](../installer/README.md) and `installer/GSBT_Setup.iss`.
 
-- Copies the full self-contained `publish\` tree (~150–250 MB).
+- Copies self-contained `publish\` (~180–220 MB; .NET + WinApp SDK + app).
 - Always creates `gsbt-sandbox.exe` / `gsbt-sandbox.pri` hard links (0 extra bytes).
 - Optional desktop icon tasks only; no sandbox component toggle.
 

@@ -50,17 +50,61 @@ public sealed class CatalogRegressionTests
     }
 
     [Fact]
-    public void UserData_dir_matches_python_gsbt_layout()
+    public void Suggested_default_backup_path_uses_gsbt_backups_folder()
     {
-        var appData = UserDataDir.GetAppUserDataDir();
-        Assert.Equal("GSBT", Path.GetFileName(appData.TrimEnd('\\', '/')));
+        Assert.Equal("gsbt-backups", BackupPaths.SuggestedFolderName);
+        var path = BackupPaths.SuggestedDefaultBackupPath();
+        Assert.EndsWith("gsbt-backups", path, StringComparison.OrdinalIgnoreCase);
+        Assert.True(Directory.Exists(Path.GetDirectoryName(path)!));
     }
 
     [Fact]
-    public void WinUi_user_data_dir_lives_under_gsbt_root()
+    public void UserData_dir_uses_full_app_folder_name()
+    {
+        var appData = UserDataDir.GetAppUserDataDir();
+        Assert.Equal(UserDataDir.AppFolderName, Path.GetFileName(appData.TrimEnd('\\', '/')));
+    }
+
+    [Fact]
+    public void WinUi_user_data_dir_lives_under_app_root()
     {
         var root = UserDataDir.GetAppUserDataDir();
         var winUi = UserDataDir.GetWinUiUserDataDir();
         Assert.Equal(Path.Combine(root, UserDataDir.WinUiSubdir), winUi.TrimEnd('\\', '/'), StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Local_short_data_dir_uses_gsbt_subfolder()
+    {
+        var shortRoot = UserDataDir.GetLocalShortDataDir();
+        Assert.Equal(UserDataDir.ShortSubdirName, Path.GetFileName(shortRoot.TrimEnd('\\', '/')));
+        Assert.EndsWith(UserDataDir.AppFolderName, Path.GetDirectoryName(shortRoot.TrimEnd('\\', '/'))!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Roaming_legacy_gsbt_folder_migrates_into_app_root()
+    {
+        var baseDir = Path.Combine(Path.GetTempPath(), "gsbt_migrate_" + Guid.NewGuid().ToString("N"));
+        var legacy = Path.Combine(baseDir, UserDataDir.LegacyAppFolderName);
+        var target = Path.Combine(baseDir, UserDataDir.AppFolderName);
+        Directory.CreateDirectory(legacy);
+        File.WriteAllText(Path.Combine(legacy, "migration_marker.txt"), "legacy");
+
+        try
+        {
+            UserDataDir.MigrateLegacyDirectoryForTests(legacy, target);
+            Assert.True(File.Exists(Path.Combine(target, "migration_marker.txt")));
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(baseDir, recursive: true);
+            }
+            catch
+            {
+                // ignore test cleanup failures on locked files
+            }
+        }
     }
 }

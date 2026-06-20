@@ -84,6 +84,7 @@
                     ItemsSource="{x:Bind ViewModel.DisplayedGames, Mode=OneWay}"
                     SortAscending="{x:Bind ViewModel.DisplaySortAscending, Mode=OneWay}"
                     SortColumnId="{x:Bind ViewModel.DisplaySortColumnId, Mode=OneWay}" />
+                <controls:CompressionScreenSaverOverlay x:Name="CompressionScreenSaver" />
             </Grid>
             <!-- Stacked: integrity above toast. Row0 * keeps strip bottom-aligned so when the toast row collapses the strip eases down smoothly. -->
             <Grid
@@ -505,7 +506,10 @@
                             Padding="10,4,10,4">
                             <Button.Flyout>
                                 <MenuFlyout x:Name="ToolsMenuFlyout">
-                                    <MenuFlyoutItem Click="Diagnostics_Click" Text="Diagnostics">
+                                    <MenuFlyoutItem
+                                        x:Name="DiagnosticsMenuItem"
+                                        Click="Diagnostics_Click"
+                                        Text="Diagnostics">
                                         <MenuFlyoutItem.KeyboardAccelerators>
                                             <KeyboardAccelerator Key="F12" />
                                         </MenuFlyoutItem.KeyboardAccelerators>
@@ -648,15 +652,6 @@
         </TeachingTip>
 
         <TeachingTip
-            x:Name="CompressionEngineTeachingTip"
-            Grid.RowSpan="3"
-            Title="Faster backups with 7-Zip"
-            PreferredPlacement="Bottom"
-            PlacementMargin="0,10,0,0"
-            IsLightDismissEnabled="True"
-            Closed="CompressionEngineTeachingTip_Closed" />
-
-        <TeachingTip
             x:Name="SettingsAfterCompressTeachingTip"
             Grid.RowSpan="3"
             Title="Compression in Settings"
@@ -668,7 +663,7 @@
                 <TextBlock
                     MaxWidth="340"
                     TextWrapping="WrapWholeWords"
-                    Text="Tap Settings here, then open the Compression tab for more options (presets, 7-Zip, and more)." />
+                    Text="Tap Settings here, then open the Compression tab to adjust level, screen saver, and compress-on-exit." />
             </TeachingTip.Content>
         </TeachingTip>
     </Grid>

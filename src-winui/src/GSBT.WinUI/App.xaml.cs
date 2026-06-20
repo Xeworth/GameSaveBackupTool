@@ -107,6 +107,20 @@ namespace GSBT.WinUI
                 e.Handled = true;
             };
 
+            if (!SevenZipNativeLibrary.TryInitialize(Path.Combine(AppContext.BaseDirectory, "7z.dll")))
+            {
+                try
+                {
+                    StartupFailureReporter.Report(
+                        new InvalidOperationException(SevenZipNativeLibrary.LastError ?? "7z.dll failed to load."),
+                        "SevenZipNativeLibrary");
+                }
+                catch
+                {
+                    // continue; compress will report unavailable at runtime
+                }
+            }
+
             Host = BuildHost();
 
             LaunchSandboxMonitor = !IsSandboxSimulationChild && SandboxLaunchParser.ShouldOpenMonitor();
@@ -228,7 +242,7 @@ namespace GSBT.WinUI
             throw new Exception("Failed to load Page " + e.SourcePageType.FullName);
         }
 
-        /// <summary>Writes the same crash text to temp (easy paste) and %AppData%\Roaming\GSBT\logs (persistent).</summary>
+        /// <summary>Writes the same crash text to temp (easy paste) and %AppData%\Game Save Backup Tool\winui\logs (persistent).</summary>
         internal static void TryWriteCrashLog(Exception? ex)
         {
             if (ex is null)

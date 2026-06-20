@@ -8,7 +8,7 @@ using GSBT.Core.Models;
 namespace GSBT.Core.Services;
 
 /// <summary>
-/// Persists per–backup-run checkpoints under <c>%AppData%\GSBT\winui\backup_run_checkpoints\</c> (hidden from the backup folder itself).
+/// Persists per–backup-run checkpoints under <c>%AppData%\Game Save Backup Tool\winui\backup_run_checkpoints\</c> (hidden from the backup folder itself).
 /// </summary>
 public static class BackupRunManifestStore
 {

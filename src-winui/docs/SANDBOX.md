@@ -23,7 +23,7 @@ Sandbox features include:
 - Live log hub and resource monitor
 - Simulated child process with dummy games (`data/sandbox_simulation/`)
 - Compression benchmark UI
-- Overrides for “7-Zip installed”, checkpoint drift previews, etc.
+- Overrides for compression UI simulation, checkpoint drift previews, etc.
 
 ## Installers (planned)
 
@@ -41,4 +41,4 @@ Advanced testing spawns a second process with isolated settings. See `Simulation
 ## Network in sandbox
 
 - Manifest “Download latest and rescan” is **disabled** in the simulation window (avoids GitHub from dummy runs)
-- **Get 7-Zip** installer download is **disabled** in simulation; use the full app for real installs
+- Compression in simulation uses the same bundled `7z.dll` as the main app when the publish folder is intact

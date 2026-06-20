@@ -33,6 +33,7 @@ public sealed partial class SandboxStatesView : UserControl
                 SandboxSevenZipUiMode.SimulateAbsent => 2,
                 _ => 0
             };
+            ScreenSaverAssetCombo.SelectedIndex = FindScreenSaverComboIndex(_state.ScreenSaverPreviewAssetId);
         }
         finally
         {
@@ -95,6 +96,42 @@ public sealed partial class SandboxStatesView : UserControl
         };
     }
 
+    private void ScreenSaverAssetCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppress || ScreenSaverAssetCombo.SelectedIndex < 0)
+        {
+            return;
+        }
+
+        _state.ScreenSaverPreviewAssetId = ParseScreenSaverComboTag();
+    }
+
+    private int FindScreenSaverComboIndex(int assetId)
+    {
+        for (var i = 0; i < ScreenSaverAssetCombo.Items.Count; i++)
+        {
+            if (ScreenSaverAssetCombo.Items[i] is ComboBoxItem item
+                && int.TryParse(item.Tag?.ToString(), out var tag)
+                && tag == assetId)
+            {
+                return i;
+            }
+        }
+
+        return 0;
+    }
+
+    private int ParseScreenSaverComboTag()
+    {
+        if (ScreenSaverAssetCombo.SelectedItem is ComboBoxItem item
+            && int.TryParse(item.Tag?.ToString(), out var tag))
+        {
+            return tag;
+        }
+
+        return 0;
+    }
+
     private void SimulateMainAppButton_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -149,5 +186,50 @@ public sealed partial class SandboxStatesView : UserControl
             XamlRoot = XamlRoot,
         };
         await GsbtContentDialog.ShowAsync(dlg);
+    }
+
+    private void PreviewScreenSaverButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetMainPage(out var mainPage))
+        {
+            _ = ShowSimpleDialogAsync(
+                "Screen saver",
+                "Could not reach the main GSBT window. Show the main app first, then try again.");
+            return;
+        }
+
+        mainPage.PreviewCompressionScreenSaver();
+    }
+
+    private void SimulateSlowCompressButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetMainPage(out var mainPage))
+        {
+            _ = ShowSimpleDialogAsync(
+                "Screen saver",
+                "Could not reach the main GSBT window. Show the main app first, then try again.");
+            return;
+        }
+
+        mainPage.SimulateSlowCompressForScreenSaver(25);
+    }
+
+    private static bool TryGetMainPage(out MainPage mainPage)
+    {
+        mainPage = null!;
+        try
+        {
+            if (App.MainWindowRef?.Content is Frame f && f.Content is MainPage mp)
+            {
+                mainPage = mp;
+                return true;
+            }
+        }
+        catch
+        {
+            // ignore
+        }
+
+        return false;
     }
 }

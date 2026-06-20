@@ -74,34 +74,25 @@ public sealed partial class SettingsPanel : UserControl
     private CheckBox _minimizeTrayCheck = null!;
     private CheckBox _showPlatformColumnCheck = null!;
     private CheckBox _showBackupSizeColumnCheck = null!;
-    private GsbtSettingsDropdown _themeCombo = null!;
-    private GsbtSettingsDropdown _dateFormatCombo = null!;
-    private GsbtSettingsDropdown _startupModeCombo = null!;
-    private GsbtSettingsDropdown _statusMessageDurationCombo = null!;
-    private GsbtSettingsDropdown _mainWindowSizeCombo = null!;
+    private ComboBox _themeCombo = null!;
+    private ComboBox _dateFormatCombo = null!;
+    private ComboBox _startupModeCombo = null!;
+    private ComboBox _statusMessageDurationCombo = null!;
+    private ComboBox _mainWindowSizeCombo = null!;
     private CheckBox _lockResolutionCheck = null!;
     private CheckBox _replayTeachingTipsNextLaunchCheck = null!;
     private MainSettingsPayload _baselinePayload = default!;
     private readonly SettingsStore _store;
     private CheckBox _askCompressOnExitCheck = null!;
-    private GsbtSettingsDropdown _compressionPresetCombo = null!;
-    private GsbtSettingsDropdown _compression7zFormatCombo = null!;
-    private NumberBox _compressionMxBox = null!;
-    private NumberBox _compressionThreadsBox = null!;
-    private string _compression7zPathValue = string.Empty;
-    private TextBlock _compression7zPathDisplay = null!;
-    private Button _browse7zButton = null!;
-    private Button _get7zipButton = null!;
-    private Button _sevenZipOfficialSiteButton = null!;
-    private Button _sevenZipInfoButton = null!;
-    private TeachingTip _sevenZipGetVsWebsiteTeachingTip = null!;
-    private TextBlock _sevenZipGetVsWebsiteTeachingTipBody = null!;
-    private Grid _compressionEngineRowGrid = null!;
-    private StackPanel _sevenZipEngineActionsStrip = null!;
-    private TextBlock _sevenZipInstallStatusText = null!;
-    private Border _sevenZipOnPcCard = null!;
-    private Border _sevenZipExecutableCard = null!;
-    private CompressionTabBaseline _compressionBaseline = new(false, CompressionOptionsResolver.PresetDeflateBalanced, "7z", 5, 0, string.Empty);
+    private Slider _compressionLevelSlider = null!;
+    private TextBlock _compressionLevelLabel = null!;
+    private Slider _compressionThreadsSlider = null!;
+    private TextBlock _compressionThreadsLabel = null!;
+    private int _compressionThreadsSliderMax = 1;
+    private CheckBox _screenSaverEnabledCheck = null!;
+    private ComboBox _screenSaverWaitCombo = null!;
+    private ComboBox _compressionArchiveModeCombo = null!;
+    private CompressionTabBaseline _compressionBaseline = new(false, 5, 0, true, true, 60);
 
     public SettingsPanel(MainViewModel viewModel, SettingsStore store, Action? afterLiveThemeApply = null, Func<string, Task>? liveThemeApplyAsync = null)
     {
@@ -121,11 +112,7 @@ public sealed partial class SettingsPanel : UserControl
         var systemPanel = BuildSystemTab();
 
         _tabPages[0] = backupPanel;
-        var compressTabHost = new Grid();
-        compressTabHost.Children.Add(compressInner);
-        compressTabHost.Children.Add(_sevenZipGetVsWebsiteTeachingTip);
-        Canvas.SetZIndex(_sevenZipGetVsWebsiteTeachingTip, 10);
-        _tabPages[1] = compressTabHost;
+        _tabPages[1] = compressInner;
         _tabPages[2] = systemPanel;
 
         var contentGrid = new Grid();
@@ -420,14 +407,19 @@ public sealed partial class SettingsPanel : UserControl
         return true;
     }
 
-    private async void ThemeDropdown_SelectionChanged(object? sender, GsbtSettingsDropdownSelectionChangedEventArgs e)
+    private async void ThemeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressThemeComboEvents)
         {
             return;
         }
 
-        if (e.SelectedTag is not string tag)
+        if (sender is not ComboBox combo)
+        {
+            return;
+        }
+
+        if ((combo.SelectedItem as ComboBoxItem)?.Tag is not string tag)
         {
             return;
         }
@@ -641,12 +633,12 @@ public sealed partial class SettingsPanel : UserControl
         ApplySettingsTabShell(root);
         AddSettingsSectionTitle(root, "System", largeTopMargin: false);
 
-        _themeCombo = CreateSettingsDropdown(SettingsSystemComboMaxWidth);
+        _themeCombo = CreateSettingsCombo(SettingsSystemComboMaxWidth);
         _themeCombo.AddOption("Use system settings", "system");
         _themeCombo.AddOption("Light", "light");
         _themeCombo.AddOption("Dark", "dark");
         _themeCombo.SetSelectedTag("dark");
-        _themeCombo.SelectionChanged += ThemeDropdown_SelectionChanged;
+        _themeCombo.SelectionChanged += ThemeCombo_SelectionChanged;
         root.Children.Add(
             WrapInSettingsCard(
                 CreateSettingRow(
@@ -655,7 +647,7 @@ public sealed partial class SettingsPanel : UserControl
                     _themeCombo,
                     intrinsicComboWidth: SettingsSystemComboMaxWidth)));
 
-        _mainWindowSizeCombo = CreateSettingsDropdown(SettingsSystemComboMaxWidth);
+        _mainWindowSizeCombo = CreateSettingsCombo(SettingsSystemComboMaxWidth);
         _mainWindowSizeCombo.AddOption("800 × 600 (nominal)", WindowSizeHelper.MainWindowPreset800);
         _mainWindowSizeCombo.AddOption("1024 × 768 (nominal)", WindowSizeHelper.MainWindowPreset1024);
         _mainWindowSizeCombo.AddOption("Custom (last window size)", WindowSizeHelper.MainWindowPresetCustom);
@@ -678,7 +670,7 @@ public sealed partial class SettingsPanel : UserControl
         windowSizeCardInner.Children.Add(_lockResolutionCheck);
         root.Children.Add(WrapInSettingsCard(windowSizeCardInner));
 
-        _startupModeCombo = CreateSettingsDropdown(SettingsSystemComboMaxWidth);
+        _startupModeCombo = CreateSettingsCombo(SettingsSystemComboMaxWidth);
         _startupModeCombo.AddOption("Don't run on startup", "disabled");
         _startupModeCombo.AddOption("Normal", "normal");
         _startupModeCombo.AddOption("Minimized", "minimized");
@@ -721,7 +713,7 @@ public sealed partial class SettingsPanel : UserControl
         gameListInner.Children.Add(_showBackupSizeColumnCheck);
         root.Children.Add(WrapInSettingsCard(gameListInner));
 
-        _dateFormatCombo = CreateSettingsDropdown(SettingsSystemComboMaxWidth);
+        _dateFormatCombo = CreateSettingsCombo(SettingsSystemComboMaxWidth);
         _dateFormatCombo.AddOption("ISO (YYYY-MM-DD HH:MM)", "iso");
         _dateFormatCombo.AddOption("US (MM/DD/YYYY HH:MM AM/PM)", "us");
         _dateFormatCombo.AddOption("European (DD/MM/YYYY HH:MM)", "european");
@@ -772,7 +764,7 @@ public sealed partial class SettingsPanel : UserControl
         _inAppEphemeralCheck.Checked += (_, _) => SyncInAppStatusDependentUi();
         _inAppEphemeralCheck.Unchecked += (_, _) => SyncInAppStatusDependentUi();
 
-        _statusMessageDurationCombo = CreateSettingsDropdown(SettingsSystemStatusDurationComboMaxWidth);
+        _statusMessageDurationCombo = CreateSettingsCombo(SettingsSystemStatusDurationComboMaxWidth);
         for (var sec = 1; sec <= 5; sec++)
         {
             _statusMessageDurationCombo.AddOption($"{sec} seconds", sec);
@@ -818,11 +810,12 @@ public sealed partial class SettingsPanel : UserControl
         return root;
     }
 
-    private static GsbtSettingsDropdown CreateSettingsDropdown(double? minWidth = null) =>
+    private static ComboBox CreateSettingsCombo(double? minWidth = null) =>
         new()
         {
             MinWidth = minWidth ?? 0,
             HorizontalAlignment = HorizontalAlignment.Stretch,
+            FontSize = CompactFont,
         };
 
     private static void ApplySettingsTabShell(StackPanel root)
@@ -915,11 +908,6 @@ public sealed partial class SettingsPanel : UserControl
         {
             switch (control)
             {
-                case GsbtSettingsDropdown dd:
-                    var dropdownW = intrinsicComboWidth ?? SettingsIntrinsicValueMaxWidth;
-                    dd.MinWidth = dropdownW;
-                    dd.HorizontalAlignment = HorizontalAlignment.Stretch;
-                    break;
                 case ComboBox cb:
                     var comboW = intrinsicComboWidth ?? SettingsIntrinsicValueMaxWidth;
                     cb.MinWidth = comboW;
@@ -982,9 +970,6 @@ public sealed partial class SettingsPanel : UserControl
     {
         switch (control)
         {
-            case GsbtSettingsDropdown:
-                // Height owned by GsbtSettingsDropdown (DefaultButtonStyle border exceeds 28px).
-                break;
             case ComboBox combo:
                 combo.MinHeight = SettingsControlHeight;
                 combo.MaxHeight = SettingsControlHeight;
@@ -1093,24 +1078,6 @@ public sealed partial class SettingsPanel : UserControl
         }
 
         ApplyDefaultBackupPathDisplay();
-        ApplyCompression7zPathDisplay();
-    }
-
-    public void CloseSevenZipGetVsWebsiteTeachingTipProgrammatically()
-    {
-        try
-        {
-            if (!_sevenZipGetVsWebsiteTeachingTip.IsOpen)
-            {
-                return;
-            }
-
-            _sevenZipGetVsWebsiteTeachingTip.IsOpen = false;
-        }
-        catch
-        {
-            // ignore
-        }
     }
 
     /// <summary>Uses <see cref="ThemeBridge.IsShellDarkTheme"/> so fills track <see cref="MainPage"/> (not a stale Application theme).</summary>

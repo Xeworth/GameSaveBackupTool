@@ -37,7 +37,7 @@ Consider **slightly longer defaults** when tuning UX. Prefer a **Settings** cont
 | `MainViewModel.cs` | ctor, grid state, footer/progress, teaching tips, toasts |
 | `MainViewModel.Scan.cs` | manifest refresh, game detection, save-path fetch |
 | `MainViewModel.Catalog.cs` | filter, selection, add/rename rows, persisted catalog |
-| `MainViewModel.Backup.cs` | manual backup, compress, estimates, 7-Zip install |
+| `MainViewModel.Backup.cs` | manual backup, compress, estimates (bundled `7z.dll`) |
 | `MainViewModel.Integrity.cs` | last-backup disk/checkpoint warnings |
 | `MainViewModel.Settings.cs` | load/save settings payload, window size prefs |
 | `MainViewModel.Types.cs` | `BackupGamesOutcome`, `MainSettingsPayload`, toast enums |

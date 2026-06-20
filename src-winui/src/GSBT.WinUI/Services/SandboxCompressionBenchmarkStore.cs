@@ -78,7 +78,7 @@ internal static class SandboxBenchmarkFormat
     }
 }
 
-/// <summary>Persists Sandbox monitor → Benchmark tab rows under %AppData%\Roaming\GSBT\winui.</summary>
+/// <summary>Persists Sandbox monitor → Benchmark tab rows under %AppData%\Game Save Backup Tool\winui.</summary>
 public sealed class SandboxCompressionBenchmarkStore
 {
     private readonly JsonSerializerOptions _json = new()

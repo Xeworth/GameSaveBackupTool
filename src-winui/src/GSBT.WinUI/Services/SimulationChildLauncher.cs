@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using GSBT.Core.Common;
 
 namespace GSBT.WinUI.Services;
 
@@ -8,10 +9,7 @@ public static class SimulationChildLauncher
     public static string EnsureSessionRootExists()
     {
         var root = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "GSBT",
-            "SandboxSimulation",
-            "sessions",
+            UserDataDir.GetSandboxSimulationSessionsRoot(),
             Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         Directory.CreateDirectory(Path.Combine(root, "dummy_data"));
