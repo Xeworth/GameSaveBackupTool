@@ -27,13 +27,10 @@ Platform-specific extras (WinUI today): system tray, startup with Windows, optio
 
 ## Editions
 
-Same idea, different UI stacks — only **Native (WinUI)** is release-ready today; the others are placeholders for future flavours.
-
 | Folder | Edition | Status |
 |--------|---------|--------|
-| [**src-winui/**](src-winui/) | **Native** — C# / WinUI 3 | Active; primary release target |
-| [**src-pyqt/**](src-pyqt/) | **Basic** — Python PyQt GUI | Planned; source not in repo yet |
-| [**src-tui/**](src-tui/) | **Lite** — Python Textual / TUI | Planned; source not in repo yet |
+| [**src-winui/**](src-winui/) | **Native** — C# / WinUI 3 | Active release |
+| [**src-tui/**](src-tui/) | **Lite** — Python Textual / TUI | Planned; not in repo yet |
 
 ## Quick start (Windows Native)
 
