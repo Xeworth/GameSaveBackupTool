@@ -6,20 +6,24 @@ namespace GSBT.WinUI.ViewModels;
 public sealed partial class GameRowViewModel : ObservableObject
 {
     [ObservableProperty]
-    private string _gameName = string.Empty;
+    public partial string GameName { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _platform = "Unknown";
+    public partial string Platform { get; set; } = "Unknown";
 
     [ObservableProperty]
-    private string _saveStatus = GsbtUiText.SaveStatusNotFound;
+    public partial string SaveStatus { get; set; } = GsbtUiText.SaveStatusNotFound;
 
     [ObservableProperty]
-    private string _lastBackup = "Not yet backed up";
+    public partial string LastBackup { get; set; } = "Not yet backed up";
 
     /// <summary>Formatted total size of retention backup folders on disk; em dash when none.</summary>
     [ObservableProperty]
-    private string _backupSizeDisplay = GsbtUiText.EmDash;
+    public partial string BackupSizeDisplay { get; set; } = GsbtUiText.EmDash;
+
+    /// <summary>Raw backup bytes for sorting; 0 when <see cref="BackupSizeDisplay"/> is em dash.</summary>
+    [ObservableProperty]
+    public partial long BackupSizeBytes { get; set; }
 
     /// <summary>Raw backup bytes for sorting; 0 when <see cref="BackupSizeDisplay"/> is em dash.</summary>
     [ObservableProperty]
@@ -27,26 +31,26 @@ public sealed partial class GameRowViewModel : ObservableObject
 
     /// <summary>True when last-backup text was cleared because backup folders under the default backup path went missing (integrity reconcile).</summary>
     [ObservableProperty]
-    private bool _lastBackupIntegrityWarning;
+    public partial bool LastBackupIntegrityWarning { get; set; }
 
     /// <summary>True when the AppData checkpoint no longer matches files under the latest retention backup run (yellow Last backup).</summary>
     [ObservableProperty]
-    private bool _lastBackupCheckpointWarning;
+    public partial bool LastBackupCheckpointWarning { get; set; }
 
     [ObservableProperty]
-    private string? _savePathRaw;
+    public partial string? SavePathRaw { get; set; }
 
     [ObservableProperty]
-    private string? _savePathResolved;
+    public partial string? SavePathResolved { get; set; }
 
     [ObservableProperty]
-    private bool _saveInRegistryOnly;
+    public partial bool SaveInRegistryOnly { get; set; }
 
     [ObservableProperty]
-    private string? _saveRegistryHive;
+    public partial string? SaveRegistryHive { get; set; }
 
     [ObservableProperty]
-    private string? _saveRegistrySubkey;
+    public partial string? SaveRegistrySubkey { get; set; }
 
     /// <summary>True when the row was added with &quot;Add custom game&quot; (not from install scan).</summary>
     public bool IsUserAdded { get; set; }

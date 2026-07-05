@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+        <TargetFramework>$(GsbtTargetFramework)</TargetFramework>
         <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
         <OutputType>WinExe</OutputType>
 
@@ -15,12 +15,12 @@
         <LangVersion>latest</LangVersion>
         <ImplicitUsings>enable</ImplicitUsings>
         <RootNamespace>GSBT.WinUI</RootNamespace>
-        <!-- Shipped filename: gsbt.exe (installer Start Menu: Game Save Backup Tool). -->
-        <AssemblyName>gsbt</AssemblyName>
-        <!-- English-only satellites — drops fr-FR, es-MX, etc. from publish output. -->
+        <!-- Shipped filename: gsbt-main.exe (Start Menu GUI). CLI ships as gsbt.exe in the same publish folder. -->
+        <AssemblyName>gsbt-main</AssemblyName>
+        <!-- English-only satellites: drops fr-FR, es-MX, etc. from publish output. -->
         <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
 
-        <!-- Self-contained .NET + bundled WinApp SDK — reliable unpackaged WinUI install (no separate runtime). -->
+        <!-- Self-contained .NET + bundled WinApp SDK: reliable unpackaged WinUI install (no separate runtime). -->
         <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
         <!-- Wasdk self-contained publish requires a concrete RID (override when building x86/ARM from VS: win-x86 / win-arm64). -->
         <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
@@ -112,12 +112,12 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.250907003" />
-        <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4654" />
-        <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-        <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
-        <PackageReference Include="WinUIEx" Version="2.9.0" />
+        <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
+        <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2270" />
+        <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
+        <PackageReference Include="WinUIEx" Version="2.9.1" />
 
         <Manifest Include="$(ApplicationManifest)" />
     </ItemGroup>

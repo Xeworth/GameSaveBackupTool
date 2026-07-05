@@ -1,15 +1,16 @@
 @echo off
 rem Compile GSBT_Setup.iss with Inno Setup 6.
-rem Prerequisite: scripts\publish_release.bat (produces gsbt.exe in publish\).
+rem Prerequisite: scripts\publish_release.bat (produces gsbt-main.exe and gsbt.exe in publish\).
 cd /d "%~dp0\.."
+call "%CD%\scripts\_env.bat"
 
-set "PUBLISH=%CD%\src\GSBT.WinUI\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish"
-set "MAIN=%PUBLISH%\gsbt.exe"
-set "ISS=%CD%\installer\GSBT_Setup.iss"
+set "PUBLISH=%GSBT_ROOT%\src\GSBT.WinUI\bin\Release\%GSBT_TFM%\win-x64\publish"
+set "MAIN=%PUBLISH%\gsbt-main.exe"
+set "ISS=%GSBT_ROOT%\installer\GSBT_Setup.iss"
 
 if not exist "%MAIN%" goto :nopublish
 
-call "%CD%\scripts\validate_publish.bat" "%PUBLISH%"
+call "%GSBT_ROOT%\scripts\validate_publish.bat" "%PUBLISH%"
 if errorlevel 1 exit /b 1
 
 if defined ISCC goto :have_iscc

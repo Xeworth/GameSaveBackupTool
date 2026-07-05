@@ -63,6 +63,9 @@ installer/output/
 # Local scratch / session notes (never commit)
 new-compression.txt
 **/New-Session-Implementations.txt
+todo.txt
+work/
+.dotnet/
 
 # Crash dumps
 *.dmp

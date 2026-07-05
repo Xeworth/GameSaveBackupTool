@@ -10,7 +10,7 @@ Versioning: `0.MINOR.PATCH.YYMMDD` (see `AppAboutInfo.VersionDisplay`).
 ### Packaging & install
 
 - **Per-user install** under `%LocalAppData%\Game Save Backup Tool\` (no admin; PowerToys-style layout). Start Menu shortcuts; optional desktop icons.
-- **Self-contained publish** — .NET 8 + Windows App SDK bundled; no separate runtime install required.
+- **Self-contained publish** — .NET 10 + Windows App SDK bundled; no separate runtime install required.
 - **Screen saver media** packed as `data\screensaver.7z` (not loose mp4/ogg in the install folder). Extracted to user cache on first use.
 - **English-only locales** in release publish (`en-us` only; WinApp SDK MUI folders pruned after build).
 - Portable zip (`GSBT_Portable_*.zip`) — same self-contained layout; extract anywhere and run `gsbt.exe`.

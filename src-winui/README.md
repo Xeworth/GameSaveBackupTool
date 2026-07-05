@@ -1,11 +1,11 @@
 # GSBT Native — Windows (WinUI 3)
 
-C# / .NET 8 edition: scan game saves, backup with retention, compress (ZIP / bundled `.7z`), tray, auto-backup.
+C# / .NET 10 edition: scan game saves, backup with retention, compress (ZIP / bundled `.7z`), tray, auto-backup.
 
 ## Requirements
 
 - Windows 10 1809+ (64-bit recommended)
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) — build and test from source
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) — build and test from source
 - [Inno Setup 6](https://jrsoftware.org/isinfo.php) — only needed to compile `GSBT_Setup_*.exe`
 
 ## Quick start
@@ -43,7 +43,58 @@ Clean local build output:
 scripts\clean.bat
 ```
 
-## Release publish
+## CLI (`gsbt`)
+
+Terminal edition in `src/GSBT.Cli/` — same catalog and settings as the WinUI app (`%AppData%\Game Save Backup Tool\winui\`).
+
+### After install (recommended)
+
+The installer puts both binaries in one folder (e.g. `%LocalAppData%\Game Save Backup Tool\`):
+
+| File | Role |
+|------|------|
+| `gsbt.exe` | **Terminal CLI** — type `gsbt` in cmd/PowerShell (PATH task, on by default) |
+| `gsbt-main.exe` | **Desktop GUI** — Start Menu shortcut |
+
+They share `7z.dll`, manifest data, and your settings/catalog. No duplicate `dotnet run` needed.
+
+```bat
+gsbt list
+gsbt scan
+gsbt backup 3
+gsbt compress
+gsbt gui
+```
+
+### One-line install (GitHub Release required)
+
+```powershell
+irm https://raw.githubusercontent.com/Xeworth/GameSaveBackupTool/main/src-winui/scripts/install.ps1 | iex
+```
+
+Downloads `GSBT_Setup_*.exe` from the latest release and runs it silently. Open a **new** terminal afterward so PATH updates apply.
+
+### Development (before install)
+
+Short wrapper (builds CLI, then runs `gsbt`):
+
+```bat
+scripts\gsbt.bat list
+```
+
+Or full `dotnet run`:
+
+```bat
+dotnet run --project src\GSBT.Cli\GSBT.Cli.csproj -- list
+```
+
+Release publish merges CLI into the WinUI publish folder (`scripts\publish_release.bat`).
+
+Typical flow: **scan** → **list** (numbered table) → **backup** `2` or fuzzy name → **compress**.
+
+Targets: row index (`6`), lists (`1,3,5`), ranges (`2-5`), or game names (fuzzy; comma-separated for multiple). With no targets, **backup** / **compress** run on all eligible games.
+
+Add `--json` to **list**, **backup**, or **compress** for machine-readable output.
 
 Self-contained `win-x64` output for smoke tests, installer, and portable zip. `PublishTrimmed` is **off** — trimmed builds break settings/catalog/WinUI at runtime.
 
@@ -59,14 +110,14 @@ Or manually:
 dotnet publish src\GSBT.WinUI\GSBT.WinUI.csproj -c Release -r win-x64 -p:Platform=x64 -p:PublishProfile=win-x64
 ```
 
-Output: `src\GSBT.WinUI\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\`
+Output: `src\GSBT.WinUI\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish\`
 
 `publish_release.bat` wipes stale `publish\`, packs screen saver media into `data\screensaver.7z`, strips non-English locale folders, copies WinUI `Assets\`, and runs `validate_publish.bat`. Debug builds still use loose `assets\video` and `assets\audio` beside the exe.
 
 Run the published app before packaging:
 
 ```bat
-src\GSBT.WinUI\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\gsbt.exe
+src\GSBT.WinUI\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish\gsbt-main.exe
 ```
 
 ## Installer (`GSBT_Setup_*.exe`)
@@ -99,7 +150,7 @@ Full installer options, QA steps, and layout: [installer/README.md](installer/RE
 
 ## Portable zip
 
-Yes — a **portable** zip is supported. Release publish is **self-contained** (`.NET 8` and Windows App SDK bundled in the folder). Extract and run `gsbt.exe`; no installer or runtime prerequisite.
+Yes — a **portable** zip is supported. Release publish is **self-contained** (`.NET 10` and Windows App SDK bundled in the folder). Extract and run `gsbt-main.exe` (GUI) or use `gsbt.exe` (CLI) from the same folder; no installer or runtime prerequisite.
 
 From `src-winui/` (after `publish_release.bat`):
 
@@ -129,14 +180,14 @@ Typical flow:
 
 1. Bump version in `AppAboutInfo.VersionDisplay` and `installer\GSBT_Setup.iss`
 2. `scripts\package_release.bat`
-3. Create a GitHub Release (tag e.g. `v0.1.3.260619`) and attach both binaries
+3. Create a GitHub Release (tag e.g. `v0.2.0.260704`) and attach both binaries
 
 ```bat
 cd src-winui
-gh release create v0.1.3.260619 ^
-  installer\output\GSBT_Setup_0.1.3.260619.exe ^
-  installer\output\GSBT_Portable_0.1.3.260619.zip ^
-  --title "GSBT v0.1.3.260619" ^
+gh release create v0.2.0.260704 ^
+  installer\output\GSBT_Setup_0.2.0.260704.exe ^
+  installer\output\GSBT_Portable_0.2.0.260704.zip ^
+  --title "GSBT v0.2.0.260704" ^
   --notes-file ..\CHANGELOG.md
 ```
 

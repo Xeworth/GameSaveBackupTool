@@ -5,7 +5,7 @@ public static class AppAboutInfo
 {
     public const string AppName = "Game Save Backup Tool";
 
-    public const string VersionDisplay = "v0.1.3.260619";
+    public const string VersionDisplay = "v0.2.0.260704";
 
     public const string CopyrightLine = "© 2026 Xeworth";
 

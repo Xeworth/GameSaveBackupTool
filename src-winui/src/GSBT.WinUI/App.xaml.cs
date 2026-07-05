@@ -228,7 +228,9 @@ namespace GSBT.WinUI
                 () => StartupLaunchPresentation.ApplyIfNeeded(_window));
             WindowSizeHelper.ApplyMinimumClientSize(_window);
             TitleBarThemeHelper.ApplyApplicationTheme(_window, Application.Current.RequestedTheme);
-            AppBrandingIcons.TryApplySessionIcon(_window, LaunchSandboxMonitor && !IsSandboxSimulationChild);
+            AppBrandingIcons.TryApplySessionIcon(
+                _window,
+                AppIdentity.IsSandboxSession(LaunchSandboxMonitor, IsSandboxSimulationChild));
             OsAppNotifications.EnsureRegistered();
         }
 
@@ -303,16 +305,8 @@ namespace GSBT.WinUI
             return false;
         }
 
-        /// <summary><c>gsbt-sandbox.exe</c> is a hard link to <c>gsbt.exe</c> created by the installer (same as <c>-s</c>).</summary>
+        /// <summary><c>gsbt-sandbox.exe</c> is the sandbox-branded GUI apphost (same runtime behavior as <c>-s</c>).</summary>
         private static bool IsSandboxExecutableName()
-        {
-            var exe = Environment.ProcessPath;
-            if (string.IsNullOrWhiteSpace(exe))
-            {
-                return false;
-            }
-
-            return string.Equals(Path.GetFileName(exe), "gsbt-sandbox.exe", StringComparison.OrdinalIgnoreCase);
-        }
+            => AppIdentity.IsSandboxExecutablePath(Environment.ProcessPath);
     }
 }

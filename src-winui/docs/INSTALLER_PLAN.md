@@ -6,21 +6,21 @@ Owner intent (May 2026). Use this when implementing Inno Setup / WiX / MSIX and 
 
 | Entry | Installs | Start Menu |
 |-------|----------|------------|
-| **GSBT Setup** | Full `publish\` output under `%LocalAppData%\Game Save Backup Tool\` | **Game Save Backup Tool** → `gsbt.exe` |
-| *(always included)* | Hard link `gsbt-sandbox.exe` → `gsbt.exe` (no second runtime, no size difference) | **GSBT Sandbox** → `gsbt-sandbox.exe`, icon `gsbt-s.ico` |
+| **GSBT Setup** | Full `publish\` output under `%LocalAppData%\Game Save Backup Tool\` | **Game Save Backup Tool** -> `gsbt-main.exe`; terminal CLI -> `gsbt.exe` |
+| *(always included)* | `gsbt-sandbox.exe` copied from `gsbt-main.exe` with `gsbt-s.ico` embedded; `gsbt-sandbox.pri` aliases `gsbt-main.pri` | **GSBT Sandbox** -> `gsbt-sandbox.exe`, icon `gsbt-s.ico` |
 
-- **Main works alone at runtime** — normal backup/compress/tray without `-s`; sandbox UI stays hidden.
-- **Sandbox shortcut** — same binary; `gsbt-sandbox.exe` is a hard link created at install time.
+- **Main works alone at runtime**: normal backup/compress/tray without `-s`; sandbox UI stays hidden.
+- **Sandbox shortcut**: blue-icon GUI apphost; runtime behavior matches `gsbt-main.exe -s`.
 - **Future:** split sandbox UI code into a separate build or optional download once packaging can omit ~40% of the WinUI surface without shipping the same DLLs either way.
 - **Do not ship** a standalone sandbox build that opens **only** the monitor window with no main shell. That was a bad experiment; production sandbox entry must always start the **main app window** and the **sandbox monitor** together (same process today via `-s` / `LaunchSandboxMonitor`).
 
 ## `-s` launch behavior (must preserve)
 
-Equivalent to `launch_sandbox.bat` / `GSBT_SANDBOX=1`:
+Equivalent to `launch_sandbox.bat` / `gsbt-main.exe -s` / `GSBT_SANDBOX=1`:
 
-1. **Main window** — full `MainPage` backup UI (not optional).
-2. **Sandbox monitor** — `SandboxMonitorWindow` alongside.
-3. **Theme** — `ThemeBridge` syncs light/dark across both; changing theme in Main updates monitor chrome.
+1. **Main window**: full `MainPage` backup UI (not optional).
+2. **Sandbox monitor**: `SandboxMonitorWindow` alongside.
+3. **Theme**: `ThemeBridge` syncs light/dark across both; changing theme in Main updates monitor chrome.
 
 Regression test before any sandbox-only shortcut ships: both windows visible, theme toggle affects both, catalog/settings use real `%AppData%\Game Save Backup Tool\winui` (not orphan monitor).
 
@@ -51,16 +51,16 @@ From `src-winui/`:
 scripts\publish_release.bat
 ```
 
-Output: `src\GSBT.WinUI\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\`
+Output: `src\GSBT.WinUI\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish\`
 
-Main installer copies that tree. Sandbox entry is `gsbt-sandbox.exe` (hard link to `gsbt.exe`; same as `-s`).
+Main installer copies that tree. Sandbox entry is `gsbt-sandbox.exe` (copy of `gsbt-main.exe` with `gsbt-s.ico` embedded; same runtime behavior as `gsbt-main.exe -s`).
 
 ## Inno Setup (v0.1)
 
 Single installer — see [`installer/README.md`](../installer/README.md) and `installer/GSBT_Setup.iss`.
 
 - Copies self-contained `publish\` (~180–220 MB; .NET + WinApp SDK + app).
-- Always creates `gsbt-sandbox.exe` / `gsbt-sandbox.pri` hard links (0 extra bytes).
+- Always includes `gsbt-sandbox.exe` and `gsbt-sandbox.pri` for the blue-icon sandbox entry.
 - Optional desktop icon tasks only; no sandbox component toggle.
 
 ## Related docs

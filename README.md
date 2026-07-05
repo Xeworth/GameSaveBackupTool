@@ -29,6 +29,7 @@ Platform-specific extras (WinUI today): system tray, startup with Windows, optio
 
 | Folder | Edition | Status |
 |--------|---------|--------|
+| [**src-cli-win/**](src-cli-win/) | **CLI** — `gsbt.exe`, agent-friendly terminal | Active; automation backbone |
 | [**src-winui/**](src-winui/) | **Native** — C# / WinUI 3 | Active release |
 | [**src-tui/**](src-tui/) | **Lite** — Python Textual / TUI | Planned; not in repo yet |
 

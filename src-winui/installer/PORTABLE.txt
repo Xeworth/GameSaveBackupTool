@@ -1,11 +1,12 @@
-Game Save Backup Tool — portable build
+Game Save Backup Tool - portable build
 ========================================
 
 Extract this folder anywhere (USB drive, D:\Tools, etc.) and run:
 
-  gsbt.exe
+  gsbt-main.exe   (desktop GUI)
+  gsbt.exe       (terminal CLI)
 
-No installer required. This build is self-contained (.NET 8 + Windows App SDK bundled).
+No installer required. This build is self-contained (.NET 10 + Windows App SDK bundled).
 
 Prerequisite: none
 ------------------
@@ -15,7 +16,7 @@ The GSBT Setup installer installs the same files under:
 
   %LocalAppData%\Game Save Backup Tool\
 
-(per-user, no admin — like PowerToys-style tools).
+(per-user, no admin - like PowerToys-style tools).
 
 Screen saver media
 ------------------
@@ -24,8 +25,8 @@ extracts media to your user profile cache under Game Save Backup Tool.
 
 Sandbox (optional developer mode)
 ---------------------------------
-  gsbt-sandbox.exe   (same app with sandbox monitor enabled)
-  gsbt.exe -s        (equivalent)
+  gsbt-sandbox.exe   (blue-icon GUI apphost with sandbox monitor enabled)
+  gsbt-main.exe -s    (equivalent runtime behavior)
 
 Settings and data
 -----------------

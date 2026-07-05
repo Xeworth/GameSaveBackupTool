@@ -18,11 +18,18 @@ public sealed class ScrollablePerformanceChartHost : UserControl
     public const double MaxPixelsPerSample = 48;
 
     private const double WheelScrollPixelsPerTick = 48;
+    private const double ZoomAnimationMilliseconds = 140;
 
     private readonly ScrollViewer _scroll;
     private readonly PerformanceSparkline _chart;
+    private readonly DispatcherTimer _zoomTimer;
     private int _sampleCount;
     private double _pixelsPerSample;
+    private double _zoomStartPixelsPerSample;
+    private double _zoomTargetPixelsPerSample;
+    private double _zoomStartOffset;
+    private double _zoomTargetOffset;
+    private DateTime _zoomStartedUtc;
 
     public ScrollablePerformanceChartHost(
         PerformanceSparkline chart,
@@ -52,12 +59,10 @@ public sealed class ScrollablePerformanceChartHost : UserControl
         HorizontalAlignment = HorizontalAlignment.Stretch;
         Content = _scroll;
         Loaded += (_, _) => ApplyChartContentWidth();
+        _zoomTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        _zoomTimer.Tick += ZoomTimer_Tick;
 
         _scroll.AddHandler(
-            UIElement.PointerWheelChangedEvent,
-            new PointerEventHandler(OnPointerWheelChanged),
-            handledEventsToo: true);
-        _chart.AddHandler(
             UIElement.PointerWheelChangedEvent,
             new PointerEventHandler(OnPointerWheelChanged),
             handledEventsToo: true);
@@ -87,6 +92,7 @@ public sealed class ScrollablePerformanceChartHost : UserControl
     /// </summary>
     public void ZoomToSampleRange(int startIndex, int endIndex, double viewportMargin = 0.08)
     {
+        _zoomTimer.Stop();
         var n = _sampleCount;
         if (n < 2)
         {
@@ -117,6 +123,7 @@ public sealed class ScrollablePerformanceChartHost : UserControl
     /// <summary>Restores default horizontal zoom and scrolls to the start of the timeline.</summary>
     public void ResetView(double? pixelsPerSample = null)
     {
+        _zoomTimer.Stop();
         _pixelsPerSample = Math.Clamp(
             pixelsPerSample ?? DefaultPixelsPerSample,
             MinPixelsPerSample,
@@ -132,28 +139,75 @@ public sealed class ScrollablePerformanceChartHost : UserControl
     /// </param>
     public void SetPixelsPerSample(double pixelsPerSample, double? cursorXInScrollViewport = null)
     {
-        var oldWidth = LogicalContentWidth;
-        var pointerX = cursorXInScrollViewport ?? ViewportWidth / 2;
-        var oldOffset = _scroll.HorizontalOffset;
-        var contentPoint = oldOffset + pointerX;
+        var pointerX = Math.Clamp(
+            cursorXInScrollViewport ?? ViewportWidth / 2,
+            0,
+            Math.Max(0, ViewportWidth));
+        var anchorFraction = _chart.SampleFractionFromContentX(_scroll.HorizontalOffset + pointerX);
 
         var nextPixels = Math.Clamp(pixelsPerSample, MinPixelsPerSample, MaxPixelsPerSample);
         var newWidth = Math.Max(480, _sampleCount * nextPixels);
-        if (oldWidth <= 0 || newWidth <= 0 || Math.Abs(newWidth - oldWidth) < 0.5)
+        if (newWidth <= 0 || Math.Abs(newWidth - LogicalContentWidth) < 0.5)
         {
             _pixelsPerSample = nextPixels;
             ApplyChartContentWidth();
             return;
         }
 
-        var scale = newWidth / oldWidth;
-        var targetOffset = contentPoint * scale - pointerX;
+        var targetOffset = ComputeOffsetForAnchor(nextPixels, anchorFraction, pointerX);
+        StartZoomAnimation(nextPixels, targetOffset);
+    }
 
-        _pixelsPerSample = nextPixels;
-        ApplyChartContentWidth(newWidth);
+    private double ComputeOffsetForAnchor(double pixelsPerSample, double anchorFraction, double pointerX)
+    {
+        var width = Math.Max(480, _sampleCount * pixelsPerSample);
+        var targetContentX = _chart.ContentXFromSampleFraction(anchorFraction, width);
+        return ClampHorizontalOffset(targetContentX - pointerX, width);
+    }
+
+    private void StartZoomAnimation(double targetPixelsPerSample, double targetOffset)
+    {
+        _zoomTimer.Stop();
+        _zoomStartPixelsPerSample = _pixelsPerSample;
+        _zoomTargetPixelsPerSample = targetPixelsPerSample;
+        _zoomStartOffset = _scroll.HorizontalOffset;
+        _zoomTargetOffset = targetOffset;
+        _zoomStartedUtc = DateTime.UtcNow;
+
+        if (Math.Abs(_zoomTargetPixelsPerSample - _zoomStartPixelsPerSample) < 0.001 &&
+            Math.Abs(_zoomTargetOffset - _zoomStartOffset) < 0.5)
+        {
+            ApplyZoomFrame(_zoomTargetPixelsPerSample, _zoomTargetOffset);
+            return;
+        }
+
+        _zoomTimer.Start();
+    }
+
+    private void ZoomTimer_Tick(object? sender, object e)
+    {
+        var elapsed = (DateTime.UtcNow - _zoomStartedUtc).TotalMilliseconds;
+        var t = Math.Clamp(elapsed / ZoomAnimationMilliseconds, 0, 1);
+        var eased = 1 - Math.Pow(1 - t, 3);
+        var pixels = Lerp(_zoomStartPixelsPerSample, _zoomTargetPixelsPerSample, eased);
+        var offset = Lerp(_zoomStartOffset, _zoomTargetOffset, eased);
+        ApplyZoomFrame(pixels, offset);
+
+        if (t >= 1)
+        {
+            _zoomTimer.Stop();
+            ApplyZoomFrame(_zoomTargetPixelsPerSample, _zoomTargetOffset);
+        }
+    }
+
+    private void ApplyZoomFrame(double pixelsPerSample, double horizontalOffset)
+    {
+        _pixelsPerSample = Math.Clamp(pixelsPerSample, MinPixelsPerSample, MaxPixelsPerSample);
+        var width = LogicalContentWidth;
+        ApplyChartContentWidth(width);
         _scroll.UpdateLayout();
         _scroll.ChangeView(
-            ClampHorizontalOffset(targetOffset),
+            ClampHorizontalOffset(horizontalOffset, width),
             null,
             null,
             disableAnimation: true);
@@ -215,6 +269,7 @@ public sealed class ScrollablePerformanceChartHost : UserControl
 
     private void PanHorizontally(double deltaPixels)
     {
+        _zoomTimer.Stop();
         if (Math.Abs(deltaPixels) < 0.01)
         {
             return;
@@ -227,9 +282,10 @@ public sealed class ScrollablePerformanceChartHost : UserControl
             disableAnimation: true);
     }
 
-    private double ClampHorizontalOffset(double offset)
+    private double ClampHorizontalOffset(double offset, double? extentWidth = null)
     {
-        var max = Math.Max(0, _scroll.ExtentWidth - ViewportWidth);
+        var extent = extentWidth ?? _scroll.ExtentWidth;
+        var max = Math.Max(0, extent - ViewportWidth);
         return Math.Clamp(offset, 0, max);
     }
 
@@ -238,6 +294,8 @@ public sealed class ScrollablePerformanceChartHost : UserControl
 
     private double ViewportWidth =>
         _scroll.ViewportWidth > 0 ? _scroll.ViewportWidth : _scroll.ActualWidth;
+
+    private static double Lerp(double a, double b, double t) => a + (b - a) * t;
 
     private void ApplyChartContentWidth() => ApplyChartContentWidth(LogicalContentWidth);
 

@@ -52,8 +52,6 @@ public sealed partial class SandboxMonitorSettingsView : UserControl
 
         PerfRecordWhenIdleCheck.Checked += OnPerfSettingChanged;
         PerfRecordWhenIdleCheck.Unchecked += OnPerfSettingChanged;
-        PerfShowGsbtCheck.Checked += OnPerfSettingChanged;
-        PerfShowGsbtCheck.Unchecked += OnPerfSettingChanged;
         PerfShowCompressionCheck.Checked += OnPerfSettingChanged;
         PerfShowCompressionCheck.Unchecked += OnPerfSettingChanged;
 
@@ -165,7 +163,6 @@ public sealed partial class SandboxMonitorSettingsView : UserControl
         try
         {
             PerfRecordWhenIdleCheck.IsChecked = _store.Get(SandboxResourceMonitor.RecordWhenIdleSettingsKey, false);
-            PerfShowGsbtCheck.IsChecked = PerformanceChartDisplaySettings.ShowGsbt(_store);
             PerfShowCompressionCheck.IsChecked = PerformanceChartDisplaySettings.ShowCompression(_store);
         }
         finally
@@ -259,7 +256,6 @@ public sealed partial class SandboxMonitorSettingsView : UserControl
     private void PersistPerformanceSettings()
     {
         _store.Set(SandboxResourceMonitor.RecordWhenIdleSettingsKey, PerfRecordWhenIdleCheck.IsChecked == true);
-        _store.Set(PerformanceChartDisplaySettings.ShowGsbtKey, PerfShowGsbtCheck.IsChecked == true);
         _store.Set(PerformanceChartDisplaySettings.ShowCompressionKey, PerfShowCompressionCheck.IsChecked == true);
         FlashSaved();
     }

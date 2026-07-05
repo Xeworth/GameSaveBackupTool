@@ -1,12 +1,13 @@
 @echo off
 cd /d "%~dp0\.."
+call "%~dp0_env.bat"
 
 rem Fast launcher: no build, run last compiled WinUI exe.
 rem   scripts\launch_fast.bat
 rem   scripts\launch_fast.bat sandbox
 
-set "ROOT=%CD%"
-set "EXE=%ROOT%\src\GSBT.WinUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\gsbt.exe"
+set "ROOT=%GSBT_ROOT%"
+set "EXE=%ROOT%\src\GSBT.WinUI\bin\x64\Debug\%GSBT_TFM%\win-x64\gsbt-main.exe"
 set "ARGS="
 
 if /i "%~1"=="sandbox" set "ARGS=-s"

@@ -29,6 +29,7 @@ public sealed partial class SandboxBenchmarkView : UserControl
     private readonly SandboxCompressionBenchmarkStore _store;
     private readonly SandboxLogHub _log;
     private readonly SandboxMonitorSession _monitorSession;
+    private readonly SandboxResourceMonitor _resourceMonitor;
     private readonly Window _ownerWindow;
     private bool _benchmarkRunActive;
     private bool _historyLoaded;
@@ -39,12 +40,14 @@ public sealed partial class SandboxBenchmarkView : UserControl
         SandboxCompressionBenchmarkStore store,
         SandboxLogHub log,
         SandboxMonitorSession monitorSession,
+        SandboxResourceMonitor resourceMonitor,
         Window ownerWindow)
     {
         _vm = vm;
         _store = store;
         _log = log;
         _monitorSession = monitorSession;
+        _resourceMonitor = resourceMonitor;
         _ownerWindow = ownerWindow;
         InitializeComponent();
         Loaded += SandboxBenchmarkView_Loaded;
@@ -99,9 +102,7 @@ public sealed partial class SandboxBenchmarkView : UserControl
 
     private void RefreshRunAvailability()
     {
-        RunBenchmarkButton.IsEnabled = CanRunBenchmark() && !_benchmarkRunActive;
-        CancelBenchmarkButton.IsEnabled = _benchmarkRunActive && _vm.CanCancelOperation;
-        ClearAllHistoryButton.IsEnabled = !_benchmarkRunActive;
+        ClearAllHistoryButton.IsEnabled = true;
     }
 
     private bool CanRunBenchmark()
@@ -143,7 +144,7 @@ public sealed partial class SandboxBenchmarkView : UserControl
             }
 
             RunStatusText.Text = rows.Count == 0
-                ? "No saved runs yet. Use Run benchmark (creates a real archive in your backup folder, same as main Compress)."
+                ? "No saved benchmark results yet. Run a batch benchmark to record compression results here."
                 : $"{rows.Count} saved run(s). File: {AppPaths.SandboxCompressionBenchmarksPath}";
             _historyLoaded = true;
         }
@@ -427,11 +428,14 @@ public sealed partial class SandboxBenchmarkView : UserControl
         _log.Log("benchmark", $"Start run — backup: {backup}");
         try
         {
+            var perfStartSerial = _resourceMonitor.TotalSampleSerial + 1;
             _monitorSession.SetCompressionWorkloadActive(true);
             var (msg, res) = await _vm.CompressBackupFolderWithResultAsync().ConfigureAwait(true);
+            var perfEndSerial = _resourceMonitor.TotalSampleSerial;
             if (res is not null)
             {
-                var row = SandboxBenchmarkFormat.FromResult(backup, res);
+                var perfSummary = _resourceMonitor.TryComputeSummary(perfStartSerial, perfEndSerial);
+                var row = SandboxBenchmarkFormat.FromResult(backup, res, perfSummary);
                 await _store.AppendAsync(row).ConfigureAwait(true);
                 _log.Log("benchmark", $"Recorded row {row.TitleLine}");
             }

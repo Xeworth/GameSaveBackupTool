@@ -556,6 +556,58 @@ public sealed class SandboxResourceMonitor : IDisposable
         }
     }
 
+    public SandboxPerformanceSummary? TryComputeSummary(long startSerial, long endSerial)
+    {
+        lock (_lock)
+        {
+            if (_appCpu.Count == 0)
+            {
+                return null;
+            }
+
+            var loSerial = Math.Min(startSerial, endSerial);
+            var hiSerial = Math.Max(startSerial, endSerial);
+            var lo = (int)(loSerial - _historyStartSerial);
+            var hi = (int)(hiSerial - _historyStartSerial);
+            lo = Math.Clamp(lo, 0, _appCpu.Count - 1);
+            hi = Math.Clamp(hi, lo, _appCpu.Count - 1);
+
+            var count = hi - lo + 1;
+            if (count <= 0)
+            {
+                return null;
+            }
+
+            double maxCpu = 0;
+            double sumCpu = 0;
+            double maxRam = 0;
+            double sumRam = 0;
+            for (var i = lo; i <= hi; i++)
+            {
+                var cpu = SumDistinctSampleValues(_appCpu[i], _sevenZipCpu[i], 100);
+                var ram = SumDistinctSampleValues(_appMemMb[i], _sevenZipMemMb[i], double.MaxValue);
+                maxCpu = Math.Max(maxCpu, cpu);
+                sumCpu += cpu;
+                maxRam = Math.Max(maxRam, ram);
+                sumRam += ram;
+            }
+
+            return new SandboxPerformanceSummary(
+                maxCpu,
+                sumCpu / count,
+                maxRam,
+                sumRam / count);
+        }
+    }
+
+    private static double SumDistinctSampleValues(double appValue, double engineValue, double max)
+    {
+        var value = engineValue > 0 && Math.Abs(appValue - engineValue) < 0.001
+            ? appValue
+            : appValue + engineValue;
+        return Math.Clamp(value, 0, max);
+    }
+
     private void SampleTick()
     {
         try
@@ -766,3 +818,9 @@ public sealed class SandboxResourceMonitor : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GlobalMemoryStatusEx(ref MemoryStatusEx lpBuffer);
 }
+
+public sealed record SandboxPerformanceSummary(
+    double MaxCpuPercent,
+    double AvgCpuPercent,
+    double MaxRamMiB,
+    double AvgRamMiB);

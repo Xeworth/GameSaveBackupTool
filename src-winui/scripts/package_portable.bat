@@ -4,15 +4,17 @@ rem Prerequisite: scripts\publish_release.bat
 rem Output: installer\output\GSBT_Portable_<version>.zip
 setlocal EnableDelayedExpansion
 cd /d "%~dp0\.."
+call "%~dp0_env.bat"
 
-set "PUBLISH=%CD%\src\GSBT.WinUI\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish"
-set "MAIN=%PUBLISH%\gsbt.exe"
-set "OUTDIR=%CD%\installer\output"
-set "ISS=%CD%\installer\GSBT_Setup.iss"
+set "PUBLISH=%GSBT_ROOT%\src\GSBT.WinUI\bin\Release\%GSBT_TFM%\win-x64\publish"
+set "MAIN=%PUBLISH%\gsbt-main.exe"
+set "CLI=%PUBLISH%\gsbt.exe"
+set "OUTDIR=%GSBT_ROOT%\installer\output"
+set "ISS=%GSBT_ROOT%\installer\GSBT_Setup.iss"
 
 if not exist "%MAIN%" goto :nopublish
 
-call "%CD%\scripts\validate_publish.bat" "%PUBLISH%"
+call "%GSBT_ROOT%\scripts\validate_publish.bat" "%PUBLISH%"
 if errorlevel 1 exit /b 1
 
 for /f "tokens=3 delims= " %%V in ('findstr /C:"#define MyAppVersion" "%ISS%"') do set "VERSION=%%~V"
@@ -67,7 +69,7 @@ echo Done. Portable package:
 echo   %ZIP%
 echo   ~!ZIP_MB! MB zip
 echo.
-echo Extract anywhere and run gsbt.exe. Settings go to %%AppData%%\Game Save Backup Tool as usual.
+echo Extract anywhere and run gsbt-main.exe ^(GUI^) or gsbt.exe ^(CLI^). Settings go to %%AppData%%\Game Save Backup Tool as usual.
 echo.
 exit /b 0
 

@@ -1,5 +1,6 @@
 @echo off
 cd /d "%~dp0\.."
+call "%~dp0_env.bat"
 
 rem Build then run the unpackaged exe (good default for WinUI).
 rem   scripts\launch.bat
@@ -7,11 +8,11 @@ rem   scripts\launch.bat sandbox
 rem   scripts\launch.bat nopause     - no pause after failed build
 rem From src-winui/ you can also use: launch.bat (wrapper)
 
-set "ROOT=%CD%"
+set "ROOT=%GSBT_ROOT%"
 set "LOGDIR=%ROOT%\logs"
 set "LOG=%LOGDIR%\launch-last.txt"
 set "PROJ=%ROOT%\src\GSBT.WinUI\GSBT.WinUI.csproj"
-set "EXE=%ROOT%\src\GSBT.WinUI\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\gsbt.exe"
+set "EXE=%ROOT%\src\GSBT.WinUI\bin\x64\Debug\%GSBT_TFM%\win-x64\gsbt-main.exe"
 
 set "ARGS="
 set "PAUSE_ON_FAIL=1"
@@ -30,9 +31,9 @@ echo Exe args: %ARGS% >> "%LOG%"
 echo ======================================== >> "%LOG%"
 echo. >> "%LOG%"
 
-dotnet --version >> "%LOG%" 2>&1
+"%DOTNET%" --version >> "%LOG%" 2>&1
 echo. >> "%LOG%"
-dotnet build "%PROJ%" -c Debug -r win-x64 -p:Platform=x64 -v minimal >> "%LOG%" 2>&1
+"%DOTNET%" build "%PROJ%" -c Debug -r win-x64 -p:Platform=x64 -v minimal >> "%LOG%" 2>&1
 if errorlevel 1 goto :buildfail
 
 if not exist "%EXE%" goto :nofile

@@ -1,0 +1,15 @@
+bin/
+obj/
+.vs/
+.idea/
+.vscode/
+TestResults/
+*.user
+*.suo
+*.pdb
+*.nupkg
+*.snupkg
+artifacts/
+publish/
+installer/output/
+work/

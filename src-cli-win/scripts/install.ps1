@@ -1,0 +1,97 @@
+# Install GSBT CLI for Windows from a GitHub Release zip.
+#
+# Usage:
+#   irm https://raw.githubusercontent.com/Xeworth/gsbt-cli-win/main/scripts/install.ps1 | iex
+#
+# Optional override:
+#   $env:GSBT_CLI_ZIP_URL = "https://github.com/Xeworth/gsbt-cli-win/releases/download/v0.2.0/gsbt-cli-win-v0.2.0.zip"
+
+[CmdletBinding()]
+param(
+    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA "Game Save Backup Tool"),
+    [switch]$NoPath
+)
+
+$ErrorActionPreference = "Stop"
+$Repo = if ([string]::IsNullOrWhiteSpace($env:GSBT_CLI_REPO)) { "Xeworth/gsbt-cli-win" } else { $env:GSBT_CLI_REPO }
+
+function Get-CliZipUrl {
+    if (-not [string]::IsNullOrWhiteSpace($env:GSBT_CLI_ZIP_URL)) {
+        return $env:GSBT_CLI_ZIP_URL
+    }
+
+    $api = "https://api.github.com/repos/$Repo/releases/latest"
+    Write-Host "Resolving latest GSBT CLI release from $Repo..."
+    $release = Invoke-RestMethod -Uri $api -Headers @{ "User-Agent" = "gsbt-cli-install" }
+    $asset = $release.assets |
+        Where-Object { $_.name -like "gsbt-cli-win*.zip" } |
+        Select-Object -First 1
+
+    if (-not $asset) {
+        throw "No gsbt-cli-win*.zip asset found on the latest release. Set `$env:GSBT_CLI_ZIP_URL to test a direct zip URL."
+    }
+
+    return $asset.browser_download_url
+}
+
+function Add-UserPath {
+    param([Parameter(Mandatory)][string]$Directory)
+
+    $envKey = "HKCU:\Environment"
+    $current = (Get-ItemProperty -Path $envKey -Name Path -ErrorAction SilentlyContinue).Path
+    $parts = if ([string]::IsNullOrWhiteSpace($current)) { @() } else { $current -split ';' }
+    $exists = $parts | Where-Object { $_.TrimEnd('\') -ieq $Directory.TrimEnd('\') } | Select-Object -First 1
+    if ($exists) {
+        Write-Host "PATH already contains: $Directory"
+        return
+    }
+
+    $newPath = if ([string]::IsNullOrWhiteSpace($current)) { $Directory } else { "$current;$Directory" }
+    Set-ItemProperty -Path $envKey -Name Path -Value $newPath
+    $env:PATH = "$Directory;$env:PATH"
+    Write-Host "Added to user PATH: $Directory"
+    Write-Host "Open a new terminal for PATH changes to apply everywhere."
+}
+
+$zipUrl = Get-CliZipUrl
+$tempRoot = Join-Path $env:TEMP ("gsbt-cli-install-" + [guid]::NewGuid().ToString("N"))
+$zip = Join-Path $tempRoot "gsbt-cli-win.zip"
+$extract = Join-Path $tempRoot "extract"
+$installDirFull = $executionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($InstallDir)
+
+try {
+    New-Item -ItemType Directory -Force -Path $tempRoot, $extract, $installDirFull | Out-Null
+
+    Write-Host "Downloading $zipUrl"
+    Invoke-WebRequest -Uri $zipUrl -OutFile $zip -UseBasicParsing
+
+    Write-Host "Extracting CLI package..."
+    Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
+
+    $exe = Get-ChildItem -LiteralPath $extract -Recurse -Filter "gsbt.exe" | Select-Object -First 1
+    if (-not $exe) {
+        throw "Downloaded package did not contain gsbt.exe."
+    }
+
+    $payloadRoot = $exe.Directory.FullName
+    Get-ChildItem -LiteralPath $payloadRoot -Force | Copy-Item -Destination $installDirFull -Recurse -Force
+
+    if (-not $NoPath) {
+        Add-UserPath -Directory $installDirFull
+    }
+
+    $installedExe = Join-Path $installDirFull "gsbt.exe"
+    $status = & $installedExe status --ai | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0 -or $status.success -ne $true) {
+        throw "Installed gsbt.exe did not pass status --ai verification."
+    }
+
+    Write-Host ""
+    Write-Host "GSBT CLI installed successfully."
+    Write-Host "Try:"
+    Write-Host "  gsbt status"
+    Write-Host "  gsbt list"
+}
+finally {
+    Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+}

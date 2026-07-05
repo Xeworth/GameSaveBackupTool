@@ -80,12 +80,7 @@
                         FontSize="11"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                         TextWrapping="WrapWholeWords"
-                        Text="Series visibility (live charts and detail windows):" />
-                    <CheckBox
-                        x:Name="PerfShowGsbtCheck"
-                        Content="Show GSBT CPU and RAM"
-                        FontSize="12"
-                        IsChecked="True" />
+                        Text="Compression series visibility (live charts and detail windows):" />
                     <CheckBox
                         x:Name="PerfShowCompressionCheck"
                         Content="Show compression CPU and RAM"

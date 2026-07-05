@@ -1,0 +1,5 @@
+<Project>
+  <PropertyGroup>
+    <GsbtTargetFramework>net10.0-windows10.0.19041.0</GsbtTargetFramework>
+  </PropertyGroup>
+</Project>

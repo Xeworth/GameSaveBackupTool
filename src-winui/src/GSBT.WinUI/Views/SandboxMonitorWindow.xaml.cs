@@ -498,6 +498,7 @@ public sealed partial class SandboxMonitorWindow : Window
                     App.Host!.Services.GetRequiredService<SandboxCompressionBenchmarkStore>(),
                     App.Host!.Services.GetRequiredService<SandboxLogHub>(),
                     App.Host!.Services.GetRequiredService<SandboxMonitorSession>(),
+                    App.Host!.Services.GetRequiredService<SandboxResourceMonitor>(),
                     this);
                 ShellContent.Content = bv;
                 await bv.EnsureHistoryLoadedAsync().ConfigureAwait(true);

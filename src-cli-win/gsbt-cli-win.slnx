@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GSBT.Cli/GSBT.Cli.csproj" />
+    <Project Path="src/GSBT.Core/GSBT.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GSBT.Core.Tests/GSBT.Core.Tests.csproj" />
+  </Folder>
+</Solution>
