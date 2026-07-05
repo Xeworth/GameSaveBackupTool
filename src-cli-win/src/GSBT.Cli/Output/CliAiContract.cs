@@ -1,4 +1,5 @@
 using System.Text.Json;
+using GSBT.Cli.Services;
 using GSBT.Core.Services;
 
 namespace GSBT.Cli.Output;
@@ -55,6 +56,9 @@ public static class CliAiContract
                 guiInstalled = File.Exists(guiPath),
                 sandboxExecutable = sandboxPath,
                 sandboxInstalled = File.Exists(sandboxPath),
+                cliInstallScript = GitHubReleaseAssets.CliInstallScriptUrl,
+                guiInstallScript = GitHubReleaseAssets.GuiInstallScriptUrl,
+                guiUpgradeCommand = File.Exists(guiPath) ? null : "gsbt get gui",
             },
             settingsFile = host.Settings.SettingsFilePath,
             catalogCount,
@@ -165,11 +169,23 @@ public static class CliAiContract
                 },
                 new
                 {
+                    name = "get",
+                    forms = new[] { "gsbt get gui", "gsbt get gui --force", "gsbt get gui --ai" },
+                    aiSafe = true,
+                    purpose = "Download the latest WinUI GUI installer from GitHub and run it silently.",
+                },
+                new
+                {
                     name = "gui",
                     forms = new[] { "gsbt gui" },
                     aiSafe = false,
                     purpose = "Launch the desktop GUI.",
                 },
+            },
+            install = new
+            {
+                cliScript = GitHubReleaseAssets.CliInstallScriptUrl,
+                guiScript = GitHubReleaseAssets.GuiInstallScriptUrl,
             },
             recommendedFlow = new[]
             {

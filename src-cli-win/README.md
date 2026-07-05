@@ -18,7 +18,7 @@ Planned product flow:
 1. Install the CLI-only package first.
 2. Use `gsbt scan`, `gsbt list`, `gsbt backup`, and `gsbt compress` from a terminal or AI agent.
 3. Run `gsbt status --ai` to detect whether the GUI is installed.
-4. If the GUI is missing, a future `get GUI` / upgrade command can download the full WinUI package into the same folder.
+4. If the GUI is missing, run `gsbt get gui` to download the latest WinUI installer silently.
 5. Once upgraded, `gsbt gui` opens the desktop experience.
 
 ## Quick Start
@@ -101,17 +101,29 @@ artifacts\gsbt-cli-win.zip
 
 ## One-Line Install Script
 
-Once a GitHub release has a `gsbt-cli-win*.zip` asset, this script can install the latest CLI package:
+Install the latest CLI from GitHub (uses `gsbt-cli-win*.zip`, or falls back to the portable release zip):
 
 ```powershell
-irm https://raw.githubusercontent.com/Xeworth/gsbt-cli-win/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/Xeworth/GameSaveBackupTool/main/src-cli-win/scripts/install.ps1 | iex
 ```
 
-During early testing you can override the download URL:
+During testing you can override the download URL:
 
 ```powershell
-$env:GSBT_CLI_ZIP_URL = "https://github.com/Xeworth/gsbt-cli-win/releases/download/v0.2.0/gsbt-cli-win-v0.2.0.zip"
-irm https://raw.githubusercontent.com/Xeworth/gsbt-cli-win/main/scripts/install.ps1 | iex
+$env:GSBT_CLI_ZIP_URL = "https://github.com/Xeworth/GameSaveBackupTool/releases/download/v0.1.3.260619/gsbt-portable-0.1.3.260619.zip"
+irm https://raw.githubusercontent.com/Xeworth/GameSaveBackupTool/main/src-cli-win/scripts/install.ps1 | iex
+```
+
+Install the WinUI GUI beside the CLI:
+
+```powershell
+gsbt get gui
+```
+
+Or install the full GUI package directly:
+
+```powershell
+irm https://raw.githubusercontent.com/Xeworth/GameSaveBackupTool/main/src-winui/scripts/install.ps1 | iex
 ```
 
 ## Local Install

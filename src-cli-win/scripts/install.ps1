@@ -1,10 +1,11 @@
 # Install GSBT CLI for Windows from a GitHub Release zip.
 #
 # Usage:
-#   irm https://raw.githubusercontent.com/Xeworth/gsbt-cli-win/main/scripts/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/Xeworth/GameSaveBackupTool/main/src-cli-win/scripts/install.ps1 | iex
 #
-# Optional override:
-#   $env:GSBT_CLI_ZIP_URL = "https://github.com/Xeworth/gsbt-cli-win/releases/download/v0.2.0/gsbt-cli-win-v0.2.0.zip"
+# Optional overrides:
+#   $env:GSBT_CLI_ZIP_URL = "https://github.com/Xeworth/GameSaveBackupTool/releases/download/v0.2.0/gsbt-cli-win-v0.2.0.zip"
+#   $env:GSBT_REPO = "Xeworth/GameSaveBackupTool"
 
 [CmdletBinding()]
 param(
@@ -13,7 +14,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Repo = if ([string]::IsNullOrWhiteSpace($env:GSBT_CLI_REPO)) { "Xeworth/gsbt-cli-win" } else { $env:GSBT_CLI_REPO }
+$Repo = if ([string]::IsNullOrWhiteSpace($env:GSBT_REPO)) { "Xeworth/GameSaveBackupTool" } else { $env:GSBT_REPO }
 
 function Get-CliZipUrl {
     if (-not [string]::IsNullOrWhiteSpace($env:GSBT_CLI_ZIP_URL)) {
@@ -21,16 +22,24 @@ function Get-CliZipUrl {
     }
 
     $api = "https://api.github.com/repos/$Repo/releases/latest"
-    Write-Host "Resolving latest GSBT CLI release from $Repo..."
+    Write-Host "Resolving latest GSBT CLI package from $Repo..."
     $release = Invoke-RestMethod -Uri $api -Headers @{ "User-Agent" = "gsbt-cli-install" }
+
     $asset = $release.assets |
         Where-Object { $_.name -like "gsbt-cli-win*.zip" } |
         Select-Object -First 1
 
     if (-not $asset) {
-        throw "No gsbt-cli-win*.zip asset found on the latest release. Set `$env:GSBT_CLI_ZIP_URL to test a direct zip URL."
+        $asset = $release.assets |
+            Where-Object { $_.name -like "*portable*.zip" } |
+            Select-Object -First 1
     }
 
+    if (-not $asset) {
+        throw "No gsbt-cli-win*.zip or *portable*.zip asset found on the latest release. Set `$env:GSBT_CLI_ZIP_URL to test a direct zip URL."
+    }
+
+    Write-Host "Using release asset: $($asset.name)"
     return $asset.browser_download_url
 }
 
@@ -55,7 +64,7 @@ function Add-UserPath {
 
 $zipUrl = Get-CliZipUrl
 $tempRoot = Join-Path $env:TEMP ("gsbt-cli-install-" + [guid]::NewGuid().ToString("N"))
-$zip = Join-Path $tempRoot "gsbt-cli-win.zip"
+$zip = Join-Path $tempRoot "gsbt-cli-package.zip"
 $extract = Join-Path $tempRoot "extract"
 $installDirFull = $executionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($InstallDir)
 
@@ -91,6 +100,9 @@ try {
     Write-Host "Try:"
     Write-Host "  gsbt status"
     Write-Host "  gsbt list"
+    if (-not (Test-Path (Join-Path $installDirFull "gsbt-main.exe"))) {
+        Write-Host "  gsbt get gui    # download the WinUI desktop app"
+    }
 }
 finally {
     Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue

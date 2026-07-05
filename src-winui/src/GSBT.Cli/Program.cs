@@ -215,6 +215,24 @@ public static class Program
         var guiCommand = new Command("gui", "Open the WinUI desktop app");
         guiCommand.SetAction((_, ct) => Task.FromResult(LaunchGuiApp()));
 
+        var getForceOption = new Option<bool>("--force")
+        {
+            Description = "Re-download and run the GUI installer even if gsbt-main.exe exists",
+        };
+
+        var getGuiCommand = new Command("gui", "Download and silently install the WinUI GUI from GitHub");
+        getGuiCommand.Options.Add(aiOption);
+        getGuiCommand.Options.Add(getForceOption);
+        getGuiCommand.SetAction(async (parse, ct) =>
+        {
+            var mode = CliOutputMode.From(json: false, ai: parse.GetValue(aiOption));
+            var force = parse.GetValue(getForceOption);
+            return await GetGuiCommand.RunAsync(mode, force, ct).ConfigureAwait(false);
+        });
+
+        var getCommand = new Command("get", "Download GSBT components from GitHub");
+        getCommand.Subcommands.Add(getGuiCommand);
+
         var root = new RootCommand("Game Save Backup Tool — backup PC game saves from the terminal");
         root.Subcommands.Add(scanCommand);
         root.Subcommands.Add(listCommand);
@@ -223,6 +241,7 @@ public static class Program
         root.Subcommands.Add(settingsCommand);
         root.Subcommands.Add(addCommand);
         root.Subcommands.Add(statusCommand);
+        root.Subcommands.Add(getCommand);
         root.Subcommands.Add(guiCommand);
         root.Subcommands.Add(helpCommand);
         root.SetAction((_, ct) =>
@@ -271,7 +290,8 @@ public static class Program
         if (!File.Exists(gui))
         {
             CliConsoleFormatter.WriteError(
-                "GUI is not installed beside gsbt.exe. Install the full GSBT package to add gsbt-main.exe.");
+                "GUI is not installed beside gsbt.exe. Run gsbt get gui to download the WinUI installer, " +
+                "or install the full GSBT package.");
             CliConsoleFormatter.WriteCommandEnd();
             return 1;
         }

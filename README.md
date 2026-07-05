@@ -33,6 +33,26 @@ Platform-specific extras (WinUI today): system tray, startup with Windows, optio
 | [**src-winui/**](src-winui/) | **Native** — C# / WinUI 3 | Active release |
 | [**src-tui/**](src-tui/) | **Lite** — Python Textual / TUI | Planned; not in repo yet |
 
+## Quick start (Windows CLI)
+
+From PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/Xeworth/GameSaveBackupTool/main/src-cli-win/scripts/install.ps1 | iex
+```
+
+Then:
+
+```powershell
+gsbt status
+gsbt scan
+gsbt list
+gsbt get gui    # optional: install the WinUI desktop app
+gsbt gui
+```
+
+CLI details: [src-cli-win/README.md](src-cli-win/README.md).
+
 ## Quick start (Windows Native)
 
 From `src-winui/`:

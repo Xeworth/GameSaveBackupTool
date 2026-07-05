@@ -72,7 +72,13 @@ gsbt gui
 irm https://raw.githubusercontent.com/Xeworth/GameSaveBackupTool/main/src-winui/scripts/install.ps1 | iex
 ```
 
-Downloads `GSBT_Setup_*.exe` from the latest release and runs it silently. Open a **new** terminal afterward so PATH updates apply.
+Downloads the latest `*setup*.exe` from GitHub and runs it silently. Open a **new** terminal afterward so PATH updates apply.
+
+Upgrade from an existing CLI install:
+
+```powershell
+gsbt get gui
+```
 
 ### Development (before install)
 

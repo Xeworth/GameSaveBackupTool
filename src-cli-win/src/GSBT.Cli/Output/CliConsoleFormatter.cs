@@ -209,6 +209,8 @@ public static class CliConsoleFormatter
             host.Settings.Get,
             host.Settings.Get);
         var count = CliAiContract.GetVisibleCatalogCount(host, backupRoot, subfolder);
+        var guiPath = Path.Combine(AppContext.BaseDirectory, "gsbt-main.exe");
+        var guiInstalled = File.Exists(guiPath);
 
         AnsiConsole.WriteLine($"  Settings file : {host.Settings.SettingsFilePath}");
         AnsiConsole.WriteLine($"  Catalog games : {count}");
@@ -217,6 +219,7 @@ public static class CliConsoleFormatter
         AnsiConsole.WriteLine($"  Subfolder/game: {(subfolder ? "yes" : "no")}");
         AnsiConsole.WriteLine($"  Compression   : {opts.SummaryLabel}");
         AnsiConsole.WriteLine($"  7z engine     : {(SevenZipNativeLibrary.IsAvailable ? "ready" : SevenZipNativeLibrary.LastError ?? "unavailable")}");
+        AnsiConsole.WriteLine($"  GUI           : {(guiInstalled ? guiPath : "not installed — run gsbt get gui")}");
     }
 
     public static void WriteStatusJson(CliHost host, bool ai)

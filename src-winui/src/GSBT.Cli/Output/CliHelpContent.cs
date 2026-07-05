@@ -15,6 +15,7 @@ public static class CliHelpContent
         AnsiConsole.WriteLine("  gsbt settings          View or change settings");
         AnsiConsole.WriteLine("  gsbt add custom        Add a custom game");
         AnsiConsole.WriteLine("  gsbt status            Paths and settings summary");
+        AnsiConsole.WriteLine("  gsbt get gui           Download and install the WinUI GUI");
         AnsiConsole.WriteLine("  gsbt gui               Open the WinUI desktop app");
         AnsiConsole.WriteLine("  gsbt help              Command reference and guides");
         AnsiConsole.WriteLine();
@@ -32,6 +33,7 @@ public static class CliHelpContent
         WriteCommandSummary("settings", "Backup path, compression, retention");
         WriteCommandSummary("add", "Add a custom game with a save folder");
         WriteCommandSummary("status", "Settings file, backup path, catalog count");
+        WriteCommandSummary("get", "Download GSBT components (gsbt get gui)");
         WriteCommandSummary("gui", "Launch the WinUI desktop app");
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine("[bold]More detail[/]");
@@ -78,6 +80,9 @@ public static class CliHelpContent
                 return true;
             case "status":
                 WriteStatusHelp();
+                return true;
+            case "get":
+                WriteGetHelp();
                 return true;
             case "gui":
                 WriteGuiHelp();
@@ -226,12 +231,27 @@ public static class CliHelpContent
         AnsiConsole.WriteLine("  gsbt status");
     }
 
+    private static void WriteGetHelp()
+    {
+        WriteCommandHeader("get gui", "Download the latest WinUI GUI installer from GitHub and run it silently.");
+        AnsiConsole.WriteLine();
+        AnsiConsole.WriteLine("Usage:");
+        AnsiConsole.WriteLine("  gsbt get gui");
+        AnsiConsole.WriteLine("  gsbt get gui --force");
+        AnsiConsole.WriteLine("  gsbt get gui --ai");
+        AnsiConsole.WriteLine();
+        AnsiConsole.WriteLine("Installs gsbt-main.exe beside gsbt.exe under %LocalAppData%\\Game Save Backup Tool.");
+        AnsiConsole.WriteLine("Override the download URL with GSBT_INSTALLER_URL when testing.");
+    }
+
     private static void WriteGuiHelp()
     {
         WriteCommandHeader("gui", "Launch gsbt-main.exe from the install folder.");
         AnsiConsole.WriteLine();
         AnsiConsole.WriteLine("Usage:");
         AnsiConsole.WriteLine("  gsbt gui");
+        AnsiConsole.WriteLine();
+        AnsiConsole.WriteLine("If the GUI is missing, run gsbt get gui first.");
     }
 
     private static void WriteCommandHeader(string name, string summary)

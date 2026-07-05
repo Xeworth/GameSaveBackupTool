@@ -4,7 +4,7 @@ public static class CliHelpRouter
 {
     private static readonly HashSet<string> KnownCommands = new(StringComparer.OrdinalIgnoreCase)
     {
-        "scan", "list", "backup", "compress", "add", "settings", "status", "gui", "help",
+        "scan", "list", "backup", "compress", "add", "settings", "status", "get", "gui", "help",
     };
 
     /// <summary>Handles <c>gsbt help [cmd]</c> and <c>gsbt &lt;cmd&gt; --help</c> before command invocation.</summary>
