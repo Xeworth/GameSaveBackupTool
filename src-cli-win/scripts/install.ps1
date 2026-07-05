@@ -62,6 +62,27 @@ function Add-UserPath {
     Write-Host "Open a new terminal for PATH changes to apply everywhere."
 }
 
+function Test-InstalledCli {
+    param([Parameter(Mandatory)][string]$ExePath)
+
+    if (-not (Test-Path -LiteralPath $ExePath)) {
+        return $false
+    }
+
+    try {
+        $status = & $ExePath status --ai 2>$null | ConvertFrom-Json
+        if ($LASTEXITCODE -eq 0 -and $status.success -eq $true) {
+            return $true
+        }
+    }
+    catch {
+        # Older builds may not support status --ai yet.
+    }
+
+    & $ExePath help *> $null
+    return $LASTEXITCODE -eq 0
+}
+
 $zipUrl = Get-CliZipUrl
 $tempRoot = Join-Path $env:TEMP ("gsbt-cli-install-" + [guid]::NewGuid().ToString("N"))
 $zip = Join-Path $tempRoot "gsbt-cli-package.zip"
@@ -90,9 +111,8 @@ try {
     }
 
     $installedExe = Join-Path $installDirFull "gsbt.exe"
-    $status = & $installedExe status --ai | ConvertFrom-Json
-    if ($LASTEXITCODE -ne 0 -or $status.success -ne $true) {
-        throw "Installed gsbt.exe did not pass status --ai verification."
+    if (-not (Test-InstalledCli -ExePath $installedExe)) {
+        throw "Installed gsbt.exe could not be verified. Try running it directly or set `$env:GSBT_CLI_ZIP_URL."
     }
 
     Write-Host ""
@@ -101,7 +121,8 @@ try {
     Write-Host "  gsbt status"
     Write-Host "  gsbt list"
     if (-not (Test-Path (Join-Path $installDirFull "gsbt-main.exe"))) {
-        Write-Host "  gsbt get gui    # download the WinUI desktop app"
+        Write-Host "  gsbt get gui    # after upgrading to a CLI build that supports it"
+        Write-Host "  irm https://raw.githubusercontent.com/Xeworth/GameSaveBackupTool/main/src-winui/scripts/install.ps1 | iex"
     }
 }
 finally {
