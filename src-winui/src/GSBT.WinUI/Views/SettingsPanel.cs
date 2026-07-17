@@ -11,7 +11,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
-using WinRT.Interop;
 using Windows.System;
 using Windows.UI;
 using Windows.UI.Text;
@@ -310,7 +309,7 @@ public sealed partial class SettingsPanel : UserControl
         _lockResolutionCheck.IsChecked = s.MainWindowLockResolution;
         _replayTeachingTipsNextLaunchCheck.IsChecked = s.ReplayTeachingTipsOnNextLaunch;
 
-        var df = (s.DateFormat ?? "iso").Trim().ToLowerInvariant();
+        var df = (s.DateFormat ?? GSBT.Core.Common.BackupDateFormatter.DefaultFormatKey).Trim().ToLowerInvariant();
         _dateFormatCombo.SetSelectedTag(df);
 
         var sm = (s.RunOnStartupMode ?? "disabled").Trim().ToLowerInvariant();
@@ -331,7 +330,7 @@ public sealed partial class SettingsPanel : UserControl
 
     private MainSettingsPayload BuildPayloadFromUi()
     {
-        var dateFmt = _dateFormatCombo.GetSelectedStringTag("iso");
+        var dateFmt = _dateFormatCombo.GetSelectedStringTag(GSBT.Core.Common.BackupDateFormatter.DefaultFormatKey);
         var startupMode = _startupModeCombo.GetSelectedStringTag("disabled");
         var durationTag = Math.Clamp(_statusMessageDurationCombo.GetSelectedIntTag(3), 1, 5);
 
@@ -714,11 +713,12 @@ public sealed partial class SettingsPanel : UserControl
         root.Children.Add(WrapInSettingsCard(gameListInner));
 
         _dateFormatCombo = CreateSettingsCombo(SettingsSystemComboMaxWidth);
+        _dateFormatCombo.AddOption("System default", "system");
         _dateFormatCombo.AddOption("ISO (YYYY-MM-DD HH:MM)", "iso");
         _dateFormatCombo.AddOption("US (MM/DD/YYYY HH:MM AM/PM)", "us");
         _dateFormatCombo.AddOption("European (DD/MM/YYYY HH:MM)", "european");
         _dateFormatCombo.AddOption("Asian (YYYY/MM/DD HH:MM)", "asian");
-        _dateFormatCombo.SetSelectedTag("iso");
+        _dateFormatCombo.SetSelectedTag("system");
         root.Children.Add(
             WrapInSettingsCard(
                 CreateSettingRow(
@@ -1086,22 +1086,11 @@ public sealed partial class SettingsPanel : UserControl
 
     private async void BrowseDefaultBackup_Click(object sender, RoutedEventArgs e)
     {
-        try
+        var result = await OwnedFolderPicker.PickSingleFolderAsync(App.MainWindowRef);
+        if (result.Succeeded)
         {
-            var picker = new Windows.Storage.Pickers.FolderPicker();
-            picker.FileTypeFilter.Add("*");
-            var hwnd = WindowNative.GetWindowHandle(App.MainWindowRef);
-            InitializeWithWindow.Initialize(picker, hwnd);
-            var folder = await picker.PickSingleFolderAsync();
-            if (folder is not null)
-            {
-                _defaultBackupPathForSave = folder.Path;
-                ApplyDefaultBackupPathDisplay();
-            }
-        }
-        catch
-        {
-            // ignore
+            _defaultBackupPathForSave = result.Path!;
+            ApplyDefaultBackupPathDisplay();
         }
     }
 }

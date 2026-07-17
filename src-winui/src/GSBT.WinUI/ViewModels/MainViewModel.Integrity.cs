@@ -34,8 +34,6 @@ public sealed partial class MainViewModel
     /// </summary>
     public void ReconcileLastBackupDiskIntegrity()
     {
-        BackupRunManifestStore.PruneOrphanManifestFiles();
-
         var defaultPath = (_settings.Get("default_backup_path", string.Empty) ?? string.Empty).Trim();
         var subfolder = _settings.Get("backup_subfolder_per_game", true);
 
@@ -56,40 +54,19 @@ public sealed partial class MainViewModel
             foreach (var g in Games)
             {
                 g.LastBackupCheckpointWarning = false;
+                g.LastBackupIntegrityWarning = false;
             }
 
-            var warnedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var kv in _catalogManager.Catalog)
-            {
-                var lb = CatalogUserAdded.CoerceString(kv.Value.GetValueOrDefault("last_backup"));
-                if (!string.IsNullOrWhiteSpace(lb))
-                {
-                    warnedNames.Add(kv.Key);
-                }
-            }
-
-            if (warnedNames.Count > 0)
-            {
-                _catalogManager.ClearAllLastBackupFields();
-                foreach (var g in Games)
-                {
-                    g.LastBackupIntegrityWarning = warnedNames.Contains(g.GameName);
-                }
-
-                RefreshLastBackupDisplays();
-                ShowBackupIntegrityStrip(
-                    "Your default backup folder is missing or unreachable.\n"
-                    + "Last-backup dates were cleared until you back up again.");
-                TryNotifyAutoBackupToast(
-                    "Your default backup folder is missing or unreachable.",
-                    AutoBackupToastChrome.DismissAndClearHighlights,
-                    "Last-backup dates were cleared from the catalog until you back up again.",
-                    BackupToastSeverity.Error);
-            }
+            BackupIntegrityStripVisible = true;
+            BackupIntegrityStripMessage = "The configured backup location is unavailable. Backup history has been preserved.";
 
             _backupIntegrityCoordinator.RefreshWatcherPath();
             return;
         }
+
+        BackupRunManifestStore.PruneOrphanManifestFiles();
+        BackupIntegrityStripVisible = false;
+        BackupIntegrityStripMessage = string.Empty;
 
         foreach (var kv in _catalogManager.Catalog.ToList())
         {
@@ -132,20 +109,29 @@ public sealed partial class MainViewModel
         {
             _catalogManager.ClearLastBackupFieldsForGames(staleNames);
             RefreshLastBackupDisplays();
-            foreach (var name in staleNames)
-            {
-                var row = Games.FirstOrDefault(g => string.Equals(g.GameName, name, StringComparison.OrdinalIgnoreCase));
-                if (row is not null)
-                {
-                    row.LastBackupIntegrityWarning = true;
-                }
-            }
 
-            TryNotifyAutoBackupToast(
-                "Some game backup folders are no longer under your default backup location.",
-                AutoBackupToastChrome.DismissAndClearHighlights,
-                "Last-backup dates were cleared from the catalog.",
-                BackupToastSeverity.Error);
+            if (AnyRetentionArtifactExists(defaultPath, subfolder))
+            {
+                foreach (var name in staleNames)
+                {
+                    var row = Games.FirstOrDefault(g => string.Equals(g.GameName, name, StringComparison.OrdinalIgnoreCase));
+                    if (row is not null)
+                    {
+                        row.LastBackupIntegrityWarning = true;
+                    }
+                }
+
+                TryNotifyAutoBackupToast(
+                    "Some game backup folders are no longer under your default backup location.",
+                    AutoBackupToastChrome.DismissAndClearHighlights,
+                    "Last-backup dates were cleared from the catalog.",
+                    BackupToastSeverity.Error);
+            }
+            else
+            {
+                BackupIntegrityStripVisible = false;
+                BackupIntegrityStripMessage = string.Empty;
+            }
         }
 
         var suppressCheckpointDriftToast = staleNames.Count > 0;
@@ -153,6 +139,9 @@ public sealed partial class MainViewModel
 
         _backupIntegrityCoordinator.RefreshWatcherPath();
     }
+
+    private bool AnyRetentionArtifactExists(string defaultPath, bool subfolderPerGame) =>
+        Games.Any(g => BackupRetentionVerifier.HasRetentionArtifact(defaultPath, g.GameName, subfolderPerGame));
 
     private void ApplyBackupCheckpointDriftForAllRows(string defaultPath, bool subfolderPerGame, bool suppressCheckpointDriftToast)
     {
@@ -205,7 +194,7 @@ public sealed partial class MainViewModel
     }
 
     /// <summary>
-    /// Sandbox monitor ÔåÆ simulated child IPC: applies the same yellow Last backup emphasis and in-app toast
+    /// Sandbox monitor -> simulated child IPC: applies the same yellow Last backup emphasis and in-app toast
     /// as real checkpoint drift detection (no catalog mutation).
     /// </summary>
     public void SandboxPreviewYellowLastBackupWarning()
@@ -243,7 +232,7 @@ public sealed partial class MainViewModel
     }
 
     /// <summary>
-    /// Sandbox monitor ÔåÆ simulated child IPC: applies the same red Last backup emphasis, catalog clear for one row,
+    /// Sandbox monitor -> simulated child IPC: applies the same red Last backup emphasis, catalog clear for one row,
     /// and error toast as when retention backups disappear under the default path.
     /// </summary>
     public void SandboxPreviewRedLastBackupWarning()
@@ -310,6 +299,8 @@ public sealed partial class MainViewModel
             if (string.IsNullOrWhiteSpace(raw))
             {
                 g.LastBackup = "Not yet backed up";
+                g.LastBackupIntegrityWarning = false;
+                g.LastBackupCheckpointWarning = false;
             }
             else
             {

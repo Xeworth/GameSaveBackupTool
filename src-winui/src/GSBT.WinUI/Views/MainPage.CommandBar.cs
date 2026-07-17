@@ -58,7 +58,7 @@ public partial class MainPage
 
     private void InitializeMainCommandBarChrome()
     {
-        var scanRow = CreateIconLabelRow("Scan for games", FooterGlyphs.Scan, FooterIconStyle.Default, out var scanIcon, out var scanLabel);
+        var scanRow = CreateIconLabelRow("Scan", FooterGlyphs.Scan, FooterIconStyle.Default, out var scanIcon, out var scanLabel);
         _scanCommandBarLabel = scanLabel;
         ScanPrimaryButton.Content = scanRow;
         _footerCollapseIcons[6] = scanIcon;

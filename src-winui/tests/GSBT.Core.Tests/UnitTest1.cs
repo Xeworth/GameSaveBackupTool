@@ -31,7 +31,10 @@ public class UnitTest1
     public void ManifestProvider_Loads_Bundled_Offline()
     {
         var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-        var bundled = Path.Combine(root, "src", "GSBT.WinUI", "data", "ludusavi-save-manifest.json");
+        var winUiManifest = Path.Combine(root, "src", "GSBT.WinUI", "data", "ludusavi-save-manifest.json");
+        var bundled = File.Exists(winUiManifest)
+            ? winUiManifest
+            : Path.Combine(root, "data", "ludusavi-save-manifest.json");
         Assert.True(File.Exists(bundled));
 
         var tmp = Path.Combine(Path.GetTempPath(), $"gsbt-manifest-test-{Guid.NewGuid():N}");
@@ -40,5 +43,7 @@ public class UnitTest1
         var manifest = provider.LoadManifestOfflineOnly();
         Assert.True(manifest.TryGetProperty("name_index", out _));
         Assert.True(manifest.TryGetProperty("steam_index", out _));
+        Assert.True(manifest.GetProperty("name_index").EnumerateObject().Take(100).Count() == 100);
+        Assert.True(provider.GetProvenance().IsValid);
     }
 }

@@ -3,7 +3,10 @@ namespace GSBT.Core.Models;
 /// <summary>Serialized checkpoint for a single retention backup run (stored under AppData, not inside the backup tree).</summary>
 public sealed class BackupRunCheckpointManifest
 {
-    public int SchemaVersion { get; set; } = 1;
+    public int SchemaVersion { get; set; } = 2;
+
+    /// <summary>Stable identity for the backup operation, independent of display names and timestamps.</summary>
+    public string RunId { get; set; } = string.Empty;
 
     /// <summary>GSBT assembly version string when the checkpoint was written.</summary>
     public string? WriterVersion { get; set; }
@@ -14,6 +17,8 @@ public sealed class BackupRunCheckpointManifest
     public string BackupRunDirectory { get; set; } = string.Empty;
 
     public string SourceSaveDirectory { get; set; } = string.Empty;
+
+    public bool IsRegistry { get; set; }
 
     /// <summary>UTC ISO 8601 when the manifest was finalized after copy.</summary>
     public string CheckpointCapturedAtUtc { get; set; } = string.Empty;
@@ -37,4 +42,7 @@ public sealed class BackupRunCheckpointFileEntry
     public string CreatedTimeUtc { get; set; } = string.Empty;
 
     public string LastWriteTimeUtc { get; set; } = string.Empty;
+
+    /// <summary>SHA-256 of the backed-up file content. Empty for legacy schema-1 checkpoints.</summary>
+    public string ContentHashSha256 { get; set; } = string.Empty;
 }

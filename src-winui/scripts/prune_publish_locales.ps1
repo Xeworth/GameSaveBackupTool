@@ -27,7 +27,7 @@ $keepDirNames = @(
 )
 
 function Test-LocaleFolderName([string]$Name) {
-    # BCP-47 style folders (de, de-DE, ca-Es-VALENCIA, zh-Hans-CN, …).
+    # BCP-47 style folders (de, de-DE, ca-Es-VALENCIA, zh-Hans-CN, etc.).
     return $Name -match '^(?i)[a-z]{2,3}(-[a-z0-9]+)+$' -or $Name -match '^(?i)[a-z]{2,3}$'
 }
 

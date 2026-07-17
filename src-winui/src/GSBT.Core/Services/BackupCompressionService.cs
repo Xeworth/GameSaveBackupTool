@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using GSBT.Core.Common;
 using SharpSevenZip;
 
 namespace GSBT.Core.Services;
@@ -39,6 +40,11 @@ public sealed class BackupCompressionService
             throw new DirectoryNotFoundException(backupFolder);
         }
 
+        await using var operationLease = await OperationFileLease.AcquireAsync(
+            Path.Combine(backupFolder, ".gsbt-operation.lock"),
+            TimeSpan.FromSeconds(30),
+            cancellationToken).ConfigureAwait(false);
+
         var (entries, totalBytes, fileCount) = CollectRelativeEntries(
             backupFolder,
             subfolderPerGame,
@@ -48,9 +54,10 @@ public sealed class BackupCompressionService
             return new BackupCompressionResult(true, "No files to compress.", string.Empty, 0, 0, 0, options);
         }
 
-        var stamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+        var stamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss-fff");
         var archiveName = $"Backups_{stamp}.7z";
         var archivePath = Path.Combine(backupFolder, archiveName);
+        var stagingArchivePath = Path.Combine(backupFolder, $".gsbt-archive-{Guid.NewGuid():N}.7z");
 
         void L(string m)
         {
@@ -69,7 +76,7 @@ public sealed class BackupCompressionService
         try
         {
             await RunSevenZipNativeAsync(
-                    archivePath,
+                    stagingArchivePath,
                     options,
                     entries,
                     totalBytes,
@@ -83,7 +90,18 @@ public sealed class BackupCompressionService
         }
         catch
         {
-            TryDeletePartialArchive(archivePath);
+            TryDeletePartialArchive(stagingArchivePath);
+            throw;
+        }
+
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(stagingArchivePath, archivePath, overwrite: false);
+        }
+        catch
+        {
+            TryDeletePartialArchive(stagingArchivePath);
             throw;
         }
 
@@ -288,21 +306,14 @@ public sealed class BackupCompressionService
             ? new HashSet<string>(sanitizedGameFolderNames, StringComparer.OrdinalIgnoreCase)
             : null;
 
-        var list = Directory.EnumerateFiles(
-                root,
-                "*",
-                new EnumerationOptions
-                {
-                    RecurseSubdirectories = true,
-                    IgnoreInaccessible = true,
-                    AttributesToSkip = FileAttributes.ReparsePoint,
-                })
+        var list = EnumerateFilesStrict(root)
             .Select(file =>
             {
                 var rel = Path.GetRelativePath(root, file);
                 var entry = rel.Replace(Path.DirectorySeparatorChar, '/');
                 return (file, entry);
             })
+            .Where(x => !x.entry.StartsWith(".gsbt-", StringComparison.OrdinalIgnoreCase))
             .Where(x => !IsRootGsbtBackupArchiveRelativeEntry(x.entry))
             .Where(x => filter is null || EntryMatchesGameFilter(x.entry, subfolderPerGame, filter))
             .OrderBy(x => x.entry, StringComparer.OrdinalIgnoreCase)
@@ -321,6 +332,33 @@ public sealed class BackupCompressionService
         }
 
         return (list, total, list.Count);
+    }
+
+    private static IEnumerable<string> EnumerateFilesStrict(string root)
+    {
+        var pending = new Stack<string>();
+        pending.Push(root);
+        while (pending.Count > 0)
+        {
+            var current = pending.Pop();
+            foreach (var entry in Directory.EnumerateFileSystemEntries(current))
+            {
+                var attributes = File.GetAttributes(entry);
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                {
+                    throw new IOException($"Compression source contains a reparse point: {Path.GetRelativePath(root, entry)}");
+                }
+
+                if ((attributes & FileAttributes.Directory) != 0)
+                {
+                    pending.Push(entry);
+                }
+                else
+                {
+                    yield return entry;
+                }
+            }
+        }
     }
 
     internal static IReadOnlyList<string> GetOrderedGameFoldersFromEntries(

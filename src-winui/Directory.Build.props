@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <GsbtTargetFramework>net10.0-windows10.0.19041.0</GsbtTargetFramework>
+    <GsbtVersion>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\VERSION').Trim())</GsbtVersion>
+    <Version>$(GsbtVersion)</Version>
+    <AssemblyVersion>0.3.2.0</AssemblyVersion>
+    <FileVersion>0.3.2607.17</FileVersion>
+    <InformationalVersion>$(GsbtVersion)</InformationalVersion>
+    <Product>Game Save Backup Tool</Product>
+    <Company>Xeworth</Company>
+    <RepositoryUrl>https://github.com/Xeworth/GameSaveBackupTool</RepositoryUrl>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+  </PropertyGroup>
+</Project>

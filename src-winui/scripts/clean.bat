@@ -1,10 +1,11 @@
 @echo off
 rem Remove local build/publish/installer artifacts (already gitignored).
 cd /d "%~dp0\.."
+call "%~dp0_env.bat"
 
 echo Cleaning .NET build outputs...
-dotnet clean "%CD%\GSBT.sln" -c Debug -v q 2>nul
-dotnet clean "%CD%\GSBT.sln" -c Release -v q 2>nul
+"%DOTNET%" clean "%CD%\GSBT.sln" -c Debug -v q 2>nul
+"%DOTNET%" clean "%CD%\GSBT.sln" -c Release -v q 2>nul
 
 if exist "%CD%\src\GSBT.WinUI\bin" (
     echo Removing GSBT.WinUI\bin ...

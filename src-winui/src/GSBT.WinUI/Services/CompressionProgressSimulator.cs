@@ -18,7 +18,7 @@ public sealed class CompressionProgressSimulator : IDisposable
         _report = report;
         _timer = dispatcherQueue.CreateTimer();
         _timer.Interval = TimeSpan.FromMilliseconds(80);
-        _timer.Tick += (_, _) => OnTick();
+        _timer.Tick += Timer_Tick;
     }
 
     public void Start()
@@ -53,7 +53,13 @@ public sealed class CompressionProgressSimulator : IDisposable
         _report(100);
     }
 
-    public void Dispose() => _timer.Stop();
+    public void Dispose()
+    {
+        _timer.Stop();
+        _timer.Tick -= Timer_Tick;
+    }
+
+    private void Timer_Tick(DispatcherQueueTimer sender, object args) => OnTick();
 
     private void OnTick()
     {

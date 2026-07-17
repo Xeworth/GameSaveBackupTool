@@ -1,3 +1,4 @@
+using GSBT.WinUI.Common;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using WinRT.Interop;
@@ -7,12 +8,12 @@ namespace GSBT.WinUI.Services;
 /// <summary>Resolves <c>branding/*.ico</c> next to the built exe and applies them via <see cref="AppWindow.SetIcon"/>.</summary>
 public static class AppBrandingIcons
 {
-    public const string MainIconFileName = "gsbt.ico";
-    public const string SandboxIconFileName = "gsbt-s.ico";
+    public const string MainIconFileName = AppIdentity.MainIconFileName;
+    public const string SandboxIconFileName = AppIdentity.SandboxIconFileName;
 
     /// <summary>Main shell icon for normal launch; sandbox session uses <see cref="SandboxIconFileName"/>.</summary>
     public static string IconFileNameForSession(bool sandboxSession) =>
-        sandboxSession ? SandboxIconFileName : MainIconFileName;
+        AppIdentity.IconFileNameForSession(sandboxSession);
 
     public static bool TryResolveIconPath(string fileName, out string fullPath)
     {
@@ -54,7 +55,7 @@ public static class AppBrandingIcons
         }
         catch
         {
-            // Optional chrome — ignore if SetIcon is unavailable.
+            // Optional chrome: ignore if SetIcon is unavailable.
         }
     }
 

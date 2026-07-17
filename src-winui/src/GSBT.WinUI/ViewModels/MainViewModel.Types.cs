@@ -26,6 +26,8 @@ public readonly record struct AutoBackupTipPayload(
 
 public readonly record struct BackupGamesOutcome(string Message, int Succeeded, int Failed, bool Cancelled);
 
+public sealed record RestoreSnapshotOption(string Path, string DisplayText, string RunId);
+
 public sealed record MainSettingsPayload(
     bool MinimizeToTray,
     bool ShowDuplicateSaveTitles,

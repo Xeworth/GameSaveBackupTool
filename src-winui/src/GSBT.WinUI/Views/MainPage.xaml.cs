@@ -1905,7 +1905,7 @@ public partial class MainPage : Page
                             IsTextSelectionEnabled = true,
                             Text =
                                 "Would you like to compress your backups before closing?\n\n"
-                                + "This creates a single archive inside your backup folder using Settings → Compression (ZIP or 7-Zip). "
+                                + "This creates a single .7z archive inside your backup folder using Settings → Compression. "
                                 + "You can compress anytime from the footer Compress control or the tray menu.\n\n"
                                 + "Yes: compress then exit if compression succeeds. No: exit without compressing. Cancel: stay in the app.",
                         },
@@ -2097,7 +2097,7 @@ public partial class MainPage : Page
 
         var active = scanning ?? ViewModel.IsScanning;
 
-        var text = active ? "Scanning…" : "Scan for games";
+        var text = active ? "Scanning…" : "Scan";
         if (_scanCommandBarLabel is not null)
         {
             _scanCommandBarLabel.Text = text;

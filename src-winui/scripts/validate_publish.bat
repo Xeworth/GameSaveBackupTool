@@ -10,10 +10,13 @@ if "%OUT%"=="" (
 )
 
 set "ERR=0"
-call :require_file "%OUT%\gsbt.exe" "gsbt.exe"
-call :require_file "%OUT%\gsbt.pri" "gsbt.pri"
+call :require_file "%OUT%\gsbt.exe" "gsbt.exe CLI"
+call :require_file "%OUT%\gsbt-main.exe" "gsbt-main.exe WinUI"
+call :require_file "%OUT%\gsbt-main.pri" "gsbt-main.pri"
 call :require_file "%OUT%\Assets\StoreLogo.png" "Assets\StoreLogo.png"
 call :require_file "%OUT%\branding\gsbt.ico" "branding\gsbt.ico"
+call :require_file "%OUT%\branding\gsbt-s.ico" "branding\gsbt-s.ico"
+call :require_file "%OUT%\gsbt-main.runtimeconfig.json" "gsbt-main.runtimeconfig.json"
 call :require_file "%OUT%\gsbt.runtimeconfig.json" "gsbt.runtimeconfig.json"
 call :require_file "%OUT%\coreclr.dll" "coreclr.dll"
 call :require_file "%OUT%\WinRT.Runtime.dll" "WinRT.Runtime.dll"
@@ -28,6 +31,34 @@ call :require_file "%OUT%\gsbt-sandbox.exe" "gsbt-sandbox.exe"
 call :require_file "%OUT%\gsbt-sandbox.pri" "gsbt-sandbox.pri"
 call :require_file "%OUT%\data\screensaver.7z" "data\screensaver.7z"
 call :require_min_size "%OUT%\data\screensaver.7z" 1000000 "data\screensaver.7z"
+call :require_file "%OUT%\7z.dll" "7z.dll"
+call :require_file "%OUT%\data\ludusavi-save-manifest.json" "data\ludusavi-save-manifest.json"
+
+if exist "%OUT%\gsbt-main.exe" if exist "%OUT%\gsbt-sandbox.exe" (
+    powershell -NoProfile -Command "if ((Get-FileHash -LiteralPath '%OUT%\gsbt-main.exe').Hash -eq (Get-FileHash -LiteralPath '%OUT%\gsbt-sandbox.exe').Hash) { exit 1 }"
+    if errorlevel 1 (
+        echo ERROR: gsbt-sandbox.exe matches gsbt-main.exe byte-for-byte; the blue sandbox icon resource was not embedded.
+        set "ERR=1"
+    )
+)
+
+if exist "%OUT%\gsbt-main.pri" if exist "%OUT%\gsbt-sandbox.pri" (
+    powershell -NoProfile -Command "if ((Get-FileHash -LiteralPath '%OUT%\gsbt-main.pri').Hash -ne (Get-FileHash -LiteralPath '%OUT%\gsbt-sandbox.pri').Hash) { exit 1 }"
+    if errorlevel 1 (
+        echo ERROR: gsbt-sandbox.pri is not an exact alias of gsbt-main.pri.
+        set "ERR=1"
+    )
+)
+
+set "VERSION_FILE=%~dp0..\..\VERSION"
+if not exist "%VERSION_FILE%" (
+    echo ERROR: Missing root VERSION file.
+    set "ERR=1"
+) else (
+    set /p EXPECTED_VERSION=<"%VERSION_FILE%"
+    powershell -NoProfile -Command "$v=[Diagnostics.FileVersionInfo]::GetVersionInfo('%OUT%\gsbt-main.exe').ProductVersion.Split('+')[0]; if ($v -ne '!EXPECTED_VERSION!') { Write-Host ('ERROR: Published product version is ' + $v + ', expected !EXPECTED_VERSION!.'); exit 1 }"
+    if errorlevel 1 set "ERR=1"
+)
 
 if exist "%OUT%\assets\video" (
     echo ERROR: Loose assets\video should not ship in release publish ^(use data\screensaver.7z^).
@@ -38,14 +69,14 @@ if exist "%OUT%\Assets\video" (
     set "ERR=1"
 )
 
-if "%ERR%"=="1" (
+if !ERR! EQU 1 (
     echo.
     echo Publish validation failed. Run scripts\clean.bat then scripts\publish_release.bat.
     exit /b 1
 )
 
 for /f "usebackq delims=" %%S in (`powershell -NoProfile -Command ^
-  "$s=(Get-ChildItem -LiteralPath '%OUT%' -Recurse -File ^| Measure-Object -Property Length -Sum).Sum; [math]::Round($s/1MB,1)"`) do set "PUBLISH_MB=%%S"
+  "$s=0; foreach($f in Get-ChildItem -LiteralPath '%OUT%' -Recurse -File){$s+=$f.Length}; [math]::Round($s/1MB,1)"`) do set "PUBLISH_MB=%%S"
 
 echo Publish validation OK ^(~!PUBLISH_MB! MB in %OUT%^).
 exit /b 0
@@ -65,7 +96,7 @@ if not exist "%~1" (
 )
 for %%A in ("%~1") do set "SZ=%%~zA"
 if !SZ! LSS %~2 (
-    echo ERROR: %~3 is too small ^(!SZ! bytes^). Stale publish output can break WinRT startup.
+    echo ERROR: %~3 is too small - !SZ! bytes. Stale publish output can break WinRT startup.
     set "ERR=1"
 )
 exit /b 0

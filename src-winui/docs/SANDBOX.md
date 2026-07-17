@@ -4,7 +4,7 @@ The **sandbox** is for development and testing. End users who only want backups 
 
 ## Normal use
 
-- Run `gsbt.exe` with no extra flags
+- Run `gsbt-main.exe` with no extra flags
 - Sandbox monitor, simulated games, and benchmark UI stay hidden
 - No `-s` argument, no `GSBT_SANDBOX=1` environment variable
 
@@ -13,10 +13,10 @@ The **sandbox** is for development and testing. End users who only want backups 
 | Method | Effect |
 |--------|--------|
 | `launch_sandbox.bat` (from `src-winui/`) or `scripts\launch_sandbox.bat` | Builds and runs with `-s` |
-| `gsbt.exe -s` or `gsbt-sandbox.exe` | Opens **main window** and **sandbox monitor** (same process; not monitor-only) |
+| `gsbt-main.exe -s` or `gsbt-sandbox.exe` | Opens **main window** and **sandbox monitor** (same process; not monitor-only) |
 | `set GSBT_SANDBOX=1` | Same as `-s` when launching the exe |
 
-**Packaging rule:** Any “GSBT Sandbox” installer entry must run the same binary with `-s` against an existing **Main** install. Do not ship a build that opens only `SandboxMonitorWindow` with no main shell or no shared settings/theme with Main.
+**Packaging rule:** Any "GSBT Sandbox" installer entry must launch the sandbox-branded GUI apphost, or run `gsbt-main.exe -s`, against an existing **Main** install. Do not ship a build that opens only `SandboxMonitorWindow` with no main shell or no shared settings/theme with Main.
 
 Sandbox features include:
 
@@ -25,12 +25,12 @@ Sandbox features include:
 - Compression benchmark UI
 - Overrides for compression UI simulation, checkpoint drift previews, etc.
 
-## Installers (planned)
+## Installer behavior
 
 Full detail: [INSTALLER_PLAN.md](INSTALLER_PLAN.md).
 
-1. **Main installer** — self-contained app as `gsbt.exe`, `gsbt.ico`, works without sandbox.  
-2. **Sandbox (optional installer task)** — hard link `gsbt-sandbox.exe` → `gsbt.exe`; Start Menu shortcut with `gsbt-s.ico`; **no second copy** of the publish folder.
+1. **Main installer**: self-contained GUI as `gsbt-main.exe`, CLI as `gsbt.exe`, red-arrow `gsbt.ico`, works without sandbox.
+2. **Sandbox entry**: `gsbt-sandbox.exe` copied from `gsbt-main.exe` with blue-arrow `gsbt-s.ico` embedded; Start Menu shortcut uses `gsbt-s.ico`; no second copy of the publish folder.
 
 Today both modes ship in **one** build; sandbox is **runtime opt-in** (`-s` only).
 

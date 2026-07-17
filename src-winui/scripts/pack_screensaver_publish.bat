@@ -9,7 +9,8 @@ if "%OUT%"=="" (
     exit /b 1
 )
 
-set "ROOT=%~dp0.."
+call "%~dp0_env.bat"
+set "ROOT=%GSBT_ROOT%"
 set "ASSETS=%ROOT%\assets"
 set "ARCHIVE=%OUT%\data\screensaver.7z"
 set "SEVEN=%ROOT%\native\win-x64\7z.dll"
@@ -31,7 +32,7 @@ if not exist "%SEVEN%" (
 if not exist "%OUT%\data" mkdir "%OUT%\data"
 
 echo Packing screen saver media into data\screensaver.7z ...
-dotnet run --project "%PACKER%" -c Release --no-launch-profile -- "%ASSETS%" "%ARCHIVE%" "%SEVEN%"
+"%DOTNET%" run --project "%PACKER%" -c Release --no-launch-profile -- "%ASSETS%" "%ARCHIVE%" "%SEVEN%"
 if errorlevel 1 exit /b 1
 
 if not exist "%ARCHIVE%" (

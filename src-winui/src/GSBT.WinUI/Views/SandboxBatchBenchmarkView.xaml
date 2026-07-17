@@ -15,7 +15,7 @@
                 FontSize="11"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                 TextWrapping="WrapWholeWords"
-                Text="Queue several sandbox compressions with different presets, formats, and 7-Zip options in one run. Each step is recorded on the Benchmark tab; open Performance while a batch runs to compare CPU and RAM across steps (pink markers when each test finishes). Cancel stops the current step; Escape cancels when this panel has focus." />
+                Text="Queue several sandbox compressions with different presets, formats, and 7-Zip options in one run. Each step is recorded on the Benchmark results tab; open Performance while a batch runs to compare CPU and RAM across steps (pink markers when each test finishes). Cancel stops the current step; Escape cancels when this panel has focus." />
             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
                 <Button
                     x:Name="RunBatchButton"

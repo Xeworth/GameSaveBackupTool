@@ -18,7 +18,8 @@ These features are shared across GSBT editions (different UI “flavours,” sam
 - **Catalog** — persist your game list; add or rename entries manually
 - **Backup** one game or many; timestamped folders with **retention** (keep N backups)
 - **Registry saves** — export configured registry subtrees as `.reg` in your backup folder
-- **Compress** backup roots (built-in ZIP and native **`.7z`** via bundled `7z.dll`)
+- **Compress** backup roots to native **`.7z`** archives via bundled `7z.dll`
+- **Verify and restore** retained snapshots with explicit preview, content checks, staging, and rollback protection
 - **Auto-backup** when save files change (where the platform supports file watching)
 - **Integrity hints** — warnings when on-disk backups drift from the catalog
 - **Settings** — backup folder, compression options, filters, notifications (edition-dependent UI)
@@ -30,7 +31,7 @@ Platform-specific extras (WinUI today): system tray, startup with Windows, optio
 | Folder | Edition | Status |
 |--------|---------|--------|
 | [**src-winui/**](src-winui/) | **Native** — C# / WinUI 3 | Active release |
-| [**src-tui/**](src-tui/) | **Lite** — Python Textual / TUI | Planned; not in repo yet |
+| [**gsbt-cli-win**](https://github.com/Xeworth/gsbt-cli-win) | **Terminal CLI** — C# / Windows x64 | Active standalone release |
 
 ## Quick start (Windows Native)
 
@@ -42,7 +43,7 @@ launch.bat
 
 Build, test, publish, and installer steps: [src-winui/README.md](src-winui/README.md).
 
-**Requirements:** Windows 10 1809+ · 64-bit recommended · **self-contained** installer/portable (no separate .NET install) · per-user install in `%LocalAppData%` · unpacked app ~180–220 MB.
+**Requirements:** Windows 10 1809+ · x64 · **self-contained** installer/portable (no separate .NET install) · per-user install in `%LocalAppData%` · about 253 MB full or 194 MB Compact unpacked.
 
 **First release builds are unsigned** — Windows SmartScreen may warn until the file gains reputation. See [PRIVACY.md](PRIVACY.md) for what the app touches on your PC.
 
@@ -54,11 +55,8 @@ Build, test, publish, and installer steps: [src-winui/README.md](src-winui/READM
 | [THIRD_PARTY.md](THIRD_PARTY.md) | Bundled `7z.dll`, SharpSevenZip, and other attributions |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Issues and pull requests |
-| [docs/winui/CODEBASE_OVERVIEW.md](docs/winui/CODEBASE_OVERVIEW.md) | Architecture notes and pulse check (optional) |
 | [src-winui/docs/SANDBOX.md](src-winui/docs/SANDBOX.md) | Optional dev sandbox (`-s`) |
 | [src-winui/installer/README.md](src-winui/installer/README.md) | Build the Inno Setup installer |
-
-Contributor engineering checklists live under [docs/winui/dev/](docs/winui/dev/).
 
 ## License
 

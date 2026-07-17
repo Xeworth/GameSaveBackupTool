@@ -23,6 +23,19 @@ internal static class ScreenSaverMediaCache
 
     public static bool AudioExists(string fileName) => File.Exists(ResolveAudioPath(fileName));
 
+    public static bool IsAvailable()
+    {
+        try
+        {
+            EnsureReady();
+            return HasLooseMedia(GetMediaRoot());
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public static void EnsureReady()
     {
         lock (Gate)

@@ -207,7 +207,7 @@ public sealed partial class MainViewModel
         }
     }
 
-    /// <summary>Current explicitly selected rows; empty means no rows picked (backup treats empty as ÔÇ£all with savesÔÇØ).</summary>
+    /// <summary>Current explicitly selected rows; empty means no rows picked (backup treats empty as "all with saves").</summary>
     public List<GameRowViewModel> SnapshotLogicalSelection() => [.._logicalSelection];
 
     /// <summary>Find a grid row by catalog/game name (e.g. estimate dialog removal).</summary>
@@ -374,7 +374,7 @@ public sealed partial class MainViewModel
         }
 
         StatusText = $"Added custom game: {displayName}";
-        _sandboxLog.Log("info", $"Custom game catalogued: {displayName} ÔåÆ {resolved}");
+        _sandboxLog.Log("info", $"Custom game catalogued: {displayName} -> {resolved}");
         MarkSavedGameListEstablished();
         _autoBackup.RestartMonitoringIfNeeded();
         if (Games.Count > 0 && !IsTeachingTipMarkedShown("backup_bulk_teaching_tip_shown"))
@@ -531,7 +531,7 @@ public sealed partial class MainViewModel
         await Task.CompletedTask;
         if (!row.IsUserAdded)
         {
-            return (false, "Only games you added with ÔÇ£Add custom gameÔÇØ can be renamed here.");
+            return (false, "Only games you added with \"Add custom game\" can be renamed here.");
         }
 
         var name = (rawNewName ?? string.Empty).Trim();
@@ -576,9 +576,9 @@ public sealed partial class MainViewModel
         Games.Insert(GetSortedInsertIndexForGameName(displayName), row);
 
         ReapplyFilterFull();
-        StatusText = $"Renamed to ÔÇ£{displayName}ÔÇØ.";
+        StatusText = $"Renamed to \"{displayName}\".";
         _sandboxLog.Log("info", $"Renamed custom game to {displayName}");
-        return (true, $"Renamed to ÔÇ£{displayName}ÔÇØ.");
+        return (true, $"Renamed to \"{displayName}\".");
     }
 
     /// <summary>Set a disk save folder for a row that has no usable save location (e.g. scan showed Not found).</summary>
@@ -633,7 +633,7 @@ public sealed partial class MainViewModel
         row.SaveStatus = GsbtUiText.SaveStatusFound;
 
         ReapplyFilterFull();
-        StatusText = $"Save folder set for ÔÇ£{row.GameName}ÔÇØ.";
+        StatusText = $"Save folder set for \"{row.GameName}\".";
         _sandboxLog.Log("info", $"Manual save path for {row.GameName}: {resolved}");
         _autoBackup.RestartMonitoringIfNeeded();
         return (true, "Save folder updated.");
@@ -656,7 +656,7 @@ public sealed partial class MainViewModel
 
         if (RegistrySaveResolver.LooksLikeFilesystemPath(text))
         {
-            return (false, "That looks like a file or folder path, not a registry key. Copy the path from RegeditÔÇÖs address bar (e.g. HKCU\\Software\\ÔÇª).");
+            return (false, "That looks like a file or folder path, not a registry key. Copy the path from Regedit's address bar (e.g. HKCU\\Software\\...).");
         }
 
         if (!_catalogManager.TryGetCatalogEntryInsensitive(row.GameName, out var catalogKey, out var cat))
@@ -672,7 +672,7 @@ public sealed partial class MainViewModel
 
         if (hints.Count == 0)
         {
-            return (false, "Could not parse a registry path. Example: HKCU\\Software\\ÔÇª");
+            return (false, "Could not parse a registry path. Example: HKCU\\Software\\...");
         }
 
         RegistrySaveResolver.RegistrySaveValidation? lastFailure = null;
@@ -708,7 +708,7 @@ public sealed partial class MainViewModel
                 row.SaveStatus = GsbtUiText.SaveStatusFound;
 
                 ReapplyFilterFull();
-                _sandboxLog.Log("info", $"Manual registryÔåÆfolder for {row.GameName}: {resolved}");
+                _sandboxLog.Log("info", $"Manual registry -> folder for {row.GameName}: {resolved}");
                 _autoBackup.RestartMonitoringIfNeeded();
                 return (true, "Save folder resolved from registry.");
             }
@@ -771,6 +771,8 @@ public sealed partial class MainViewModel
     /// <summary>Return visit: hydrate the grid from the persisted catalog (scan + custom rows).</summary>
     private void RestoreSavedGameListFromCatalog()
     {
+        _catalogManager.NormalizeDetectedDisplayNames();
+
         foreach (var kv in _catalogManager.Catalog)
         {
             if (!CatalogUserAdded.IsUserAddedEntry(kv.Value))
@@ -907,7 +909,7 @@ public sealed partial class MainViewModel
         Games.Clear();
         DisplayedGames.Clear();
         _logicalSelection.Clear();
-        StatusText = "Ready. Click 'Scan for games'.";
+        StatusText = "Ready. Click 'Scan'.";
     }
 
     /// <summary>Removes install-scan rows so a new scan rebuilds the list (custom games are kept).</summary>
@@ -1233,7 +1235,7 @@ public sealed partial class MainViewModel
     {
         if (row.SaveInRegistryOnly)
         {
-            return (false, null, "This gameÔÇÖs save is registry-only ÔÇö there is no folder to open.");
+            return (false, null, "This game's save is registry-only: there is no folder to open.");
         }
 
         var path = row.SavePathResolved;

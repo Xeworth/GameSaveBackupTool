@@ -94,10 +94,10 @@ public sealed class PerformanceSparkline : Grid
         VerticalAlignment = VerticalAlignment.Stretch,
     };
 
-    private readonly Polyline _line1 = new() { StrokeThickness = 2, Fill = null };
-    private readonly Polyline _line2 = new() { StrokeThickness = 2, Fill = null };
-    private readonly Polyline _line3 = new() { StrokeThickness = 2, Fill = null, StrokeDashArray = new DoubleCollection { 4, 3 } };
-    private readonly Polyline _line4 = new() { StrokeThickness = 2, Fill = null, StrokeDashArray = new DoubleCollection { 4, 3 } };
+    private readonly Polyline _line1 = new() { StrokeThickness = 2.25, Fill = null };
+    private readonly Polyline _line2 = new() { StrokeThickness = 2.25, Fill = null };
+    private readonly Polyline _line3 = new() { StrokeThickness = 2.5, Fill = null, StrokeDashArray = new DoubleCollection { 6, 3 } };
+    private readonly Polyline _line4 = new() { StrokeThickness = 2.5, Fill = null, StrokeDashArray = new DoubleCollection { 2, 3 } };
     private bool _interceptorPointersWired;
     private bool _isRangeDragging;
     private int _dragAnchorIndex = -1;
@@ -115,6 +115,11 @@ public sealed class PerformanceSparkline : Grid
     private const double TopPad = 6;
     private const double BottomPad = 6;
     private const double TimeAxisPad = 18;
+    private const double MinVisibleNormalizedMemoryPercent = 1.0;
+    // Selection hatch tuning: increase gap for fewer lines, lower alpha for a quieter overlay.
+    private const double SelectionHatchGap = 50;
+    private const byte SelectionHatchAlpha = 72;
+    private const byte SelectionFillAlpha = 26;
 
     /// <summary>Extra space below the time axis (detail scroll views).</summary>
     public double TimeAxisExtraBottomPad { get; set; }
@@ -177,6 +182,24 @@ public sealed class PerformanceSparkline : Grid
     }
 
     public void ClearSelection() => SetSelectionRange(null, null, raiseEvent: true);
+
+    public double SampleFractionFromContentX(double contentX)
+    {
+        var width = _chartW > 1 ? _chartW : Math.Max(1, ActualWidth - LeftMargin - RightPad);
+        var left = _chartW > 1 ? _chartLeft : LeftMargin;
+        return Math.Clamp((contentX - left) / width, 0, 1);
+    }
+
+    public double ContentXFromSampleFraction(double fraction)
+    {
+        return ContentXFromSampleFraction(fraction, ActualWidth);
+    }
+
+    public double ContentXFromSampleFraction(double fraction, double contentWidth)
+    {
+        var width = Math.Max(1, contentWidth - LeftMargin - RightPad);
+        return LeftMargin + width * Math.Clamp(fraction, 0, 1);
+    }
 
     public double[]? Series1
     {
@@ -384,23 +407,33 @@ public sealed class PerformanceSparkline : Grid
 
         _line1.Stroke = Series1Brush ?? new SolidColorBrush(Microsoft.UI.Colors.DeepSkyBlue);
         _line2.Stroke = Series2Brush ?? new SolidColorBrush(Microsoft.UI.Colors.Goldenrod);
+        _line1.StrokeDashArray = SeriesNearlyEqual(Series1, Series2) ? new DoubleCollection { 7, 4 } : null;
+        _line2.StrokeDashArray = null;
         _line1.Points = BuildPoints(Series1, chartLeft, chartW, chartH, max);
         _line2.Points = BuildPoints(Series2, chartLeft, chartW, chartH, max);
-        _plotCanvas.Children.Add(_line1);
         _plotCanvas.Children.Add(_line2);
+        _plotCanvas.Children.Add(_line1);
 
         if (Series3 is { Length: > 0 })
         {
             _line3.Stroke = Series3Brush ?? new SolidColorBrush(PerformanceChartPalettes.MemGsbt);
+            _line3.StrokeDashArray = SeriesNearlyEqual(Series3, Series4)
+                ? new DoubleCollection { 7, 4 }
+                : new DoubleCollection { 6, 3 };
             _line3.Points = BuildMemoryOverlayPoints(Series3, chartLeft, chartW, chartH, max);
-            _plotCanvas.Children.Add(_line3);
         }
 
         if (Series4 is { Length: > 0 })
         {
             _line4.Stroke = Series4Brush ?? new SolidColorBrush(PerformanceChartPalettes.MemCompression);
+            _line4.StrokeDashArray = new DoubleCollection { 2, 3 };
             _line4.Points = BuildMemoryOverlayPoints(Series4, chartLeft, chartW, chartH, max);
             _plotCanvas.Children.Add(_line4);
+        }
+
+        if (Series3 is { Length: > 0 })
+        {
+            _plotCanvas.Children.Add(_line3);
         }
 
         RedrawHoverOverlay();
@@ -461,15 +494,40 @@ public sealed class PerformanceSparkline : Grid
         var hi = Math.Clamp(Math.Max(a, b), 0, n - 1);
         var x1 = chartLeft + chartW * lo / Math.Max(1, n - 1);
         var x2 = chartLeft + chartW * hi / Math.Max(1, n - 1);
-        var band = new Rectangle
+        var bandW = Math.Max(2, x2 - x1);
+        var band = new Canvas
         {
-            Width = Math.Max(2, x2 - x1),
+            Width = bandW,
             Height = chartH,
-            Fill = new SolidColorBrush(PerformanceChartPalettes.SelectionFill),
+            IsHitTestVisible = false,
+            Clip = new RectangleGeometry { Rect = new Rect(0, 0, bandW, chartH) },
+        };
+
+        band.Children.Add(new Rectangle
+        {
+            Width = bandW,
+            Height = chartH,
+            Fill = new SolidColorBrush(Color.FromArgb(SelectionFillAlpha, 255, 255, 255)),
             Stroke = new SolidColorBrush(PerformanceChartPalettes.SelectionBorder),
             StrokeThickness = 1,
             IsHitTestVisible = false,
-        };
+        });
+
+        var hatchBrush = new SolidColorBrush(Color.FromArgb(SelectionHatchAlpha, 255, 255, 255));
+        for (var x = -chartH; x < bandW + chartH; x += SelectionHatchGap)
+        {
+            band.Children.Add(new Line
+            {
+                X1 = x,
+                Y1 = chartH,
+                X2 = x + chartH,
+                Y2 = 0,
+                Stroke = hatchBrush,
+                StrokeThickness = 1,
+                IsHitTestVisible = false,
+            });
+        }
+
         Canvas.SetLeft(band, x1);
         Canvas.SetTop(band, TopPad);
         _plotCanvas.Children.Add(band);
@@ -795,6 +853,11 @@ public sealed class PerformanceSparkline : Grid
         {
             var x = chartLeft + chartW * i / Math.Max(1, n - 1);
             var pctOfRam = samples[i] / SystemTotalMemoryMb * 100.0;
+            if (pctOfRam > 0)
+            {
+                pctOfRam = Math.Max(pctOfRam, MinVisibleNormalizedMemoryPercent);
+            }
+
             var y = TopPad + chartH * (1.0 - Math.Clamp(pctOfRam, 0, max) / max);
             points.Add(new Point(x, y));
         }
@@ -905,6 +968,11 @@ public sealed class PerformanceSparkline : Grid
         if (memoryNormalized && PlotMemoryNormalized && SystemTotalMemoryMb > 0.001)
         {
             var pctOfRam = samples[idx] / SystemTotalMemoryMb * 100.0;
+            if (pctOfRam > 0)
+            {
+                pctOfRam = Math.Max(pctOfRam, MinVisibleNormalizedMemoryPercent);
+            }
+
             y = TopPad + _chartH * (1.0 - Math.Clamp(pctOfRam, 0, max) / max);
         }
         else
@@ -1071,6 +1139,37 @@ public sealed class PerformanceSparkline : Grid
         }
 
         return peak;
+    }
+
+    private static bool SeriesNearlyEqual(double[]? a, double[]? b)
+    {
+        if (a is not { Length: > 0 } || b is not { Length: > 0 })
+        {
+            return false;
+        }
+
+        var n = Math.Min(a.Length, b.Length);
+        if (n == 0)
+        {
+            return false;
+        }
+
+        var checkedSamples = 0;
+        for (var i = 0; i < n; i++)
+        {
+            if (Math.Abs(a[i]) < 0.001 && Math.Abs(b[i]) < 0.001)
+            {
+                continue;
+            }
+
+            checkedSamples++;
+            if (Math.Abs(a[i] - b[i]) > 0.001)
+            {
+                return false;
+            }
+        }
+
+        return checkedSamples > 0;
     }
 
     private static PointCollection BuildPoints(double[]? samples, double chartLeft, double chartW, double chartH, double max)

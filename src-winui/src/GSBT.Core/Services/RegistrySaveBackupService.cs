@@ -3,6 +3,7 @@ using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using GSBT.Core.Common;
+using GSBT.Core.Models;
 using Microsoft.Win32;
 
 namespace GSBT.Core.Services;
@@ -44,8 +45,16 @@ public sealed class RegistrySaveBackupService
     }
 
     /// <summary>Re-validates hive + subkey before auto-backup (catalog may be hand-edited).</summary>
-    public static bool IsRegistryTargetSafe(string hive, string subkey) =>
-        IsSubkeySafeForExport(subkey) && TryOpenKey(hive, subkey, out _);
+    public static bool IsRegistryTargetSafe(string hive, string subkey)
+    {
+        if (!IsSubkeySafeForExport(subkey) || !TryOpenKey(hive, subkey, out var key))
+        {
+            return false;
+        }
+
+        key?.Dispose();
+        return true;
+    }
 
     private static bool IsSubkeySafeForExport(string subkey)
     {
@@ -64,25 +73,43 @@ public sealed class RegistrySaveBackupService
 
     /// <summary>Stable fingerprint of all values under the key (used for poll-based change detection).</summary>
     public static bool TryComputeSnapshotFingerprint(string hive, string subkey, out string fingerprintHex)
+        => TryComputeSnapshotFingerprint(hive, subkey, out fingerprintHex, out _);
+
+    public static bool TryComputeSnapshotFingerprint(
+        string hive,
+        string subkey,
+        out string fingerprintHex,
+        out string? error)
     {
         fingerprintHex = string.Empty;
+        error = null;
         if (!TryOpenKey(hive, subkey, out var key))
         {
+            error = "Registry save key is not available.";
             return false;
         }
 
         using (key!)
         {
-            var sb = new StringBuilder(256);
-            AppendKeyFingerprint(sb, key!, string.Empty);
-            if (sb.Length == 0)
+            try
             {
+                var sb = new StringBuilder(256);
+                AppendKeyFingerprint(sb, key!, string.Empty);
+                if (sb.Length == 0)
+                {
+                    error = "Registry save key contains no readable values.";
+                    return false;
+                }
+
+                var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+                fingerprintHex = Convert.ToHexString(SHA256.HashData(bytes));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = $"Registry save key could not be read completely: {ex.Message}";
                 return false;
             }
-
-            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-            fingerprintHex = Convert.ToHexString(SHA256.HashData(bytes));
-            return true;
         }
     }
 
@@ -101,103 +128,137 @@ public sealed class RegistrySaveBackupService
         out string backupFilePath,
         out string? error)
     {
-        backupFilePath = string.Empty;
-        error = null;
+        var result = BackupToRetentionFileWithResult(
+            gameName,
+            hive,
+            subkey,
+            backupRoot,
+            retentionCount,
+            subfolderPerGame,
+            cancellationToken);
+        backupFilePath = result.BackupPath;
+        error = result.Success ? null : result.Error ?? "Registry backup did not complete.";
+    }
 
+    public BackupOperationResult BackupToRetentionFileWithResult(
+        string gameName,
+        string hive,
+        string subkey,
+        string backupRoot,
+        int retentionCount,
+        bool subfolderPerGame,
+        CancellationToken cancellationToken)
+    {
+        var displayName = string.IsNullOrWhiteSpace(gameName) ? "Game" : gameName.Trim();
+        var registrySource = TryToRegExportPath(hive, subkey, out var canonicalRegistrySource)
+            ? canonicalRegistrySource
+            : RegistrySaveResolver.FormatRegistrySaveDisplay(hive, subkey);
         if (string.IsNullOrWhiteSpace(backupRoot))
         {
-            error = "Backup destination is not set.";
-            return;
+            return RegistryFailure(displayName, registrySource, "Backup destination is not set.");
         }
 
+        if (!IsSubkeySafeForExport(subkey) || !TryOpenKey(hive, subkey, out var key))
+        {
+            return RegistryFailure(displayName, registrySource, "Registry save key is not available or is unsafe.");
+        }
+
+        key?.Dispose();
+        string root;
         try
         {
-            Directory.CreateDirectory(backupRoot);
+            root = BackupPathSafety.NormalizeDirectory(backupRoot);
+            Directory.CreateDirectory(root);
         }
         catch (Exception ex)
         {
-            error = ex.Message;
-            return;
+            return RegistryFailure(displayName, registrySource, ex.Message);
         }
 
-        if (!TryOpenKey(hive, subkey, out _))
-        {
-            error = "Registry save key is not available.";
-            return;
-        }
-
-        var safe = SanitizeGameFolderName(string.IsNullOrWhiteSpace(gameName) ? "Game" : gameName);
-        var baseDir = subfolderPerGame
-            ? Path.Combine(backupRoot, safe)
-            : backupRoot;
+        var safe = SanitizeGameFolderName(displayName);
+        var baseDir = subfolderPerGame ? Path.Combine(root, safe) : root;
+        var runId = Guid.NewGuid().ToString("N");
+        var stamp = DateTime.Now.ToString("yyyy-MM-dd_'at'_HH-mm-ss-fff");
+        var backupRunDir = Path.Combine(baseDir, $"{safe} - Backup {stamp}-{runId[..8]}");
+        var stagingDir = Path.Combine(baseDir, $".gsbt-staging-{runId}");
+        var stagingFile = Path.Combine(stagingDir, $"{safe}.reg");
+        var finalFile = Path.Combine(backupRunDir, $"{safe}.reg");
 
         try
         {
-            Directory.CreateDirectory(baseDir);
-        }
-        catch (Exception ex)
-        {
-            error = ex.Message;
-            return;
-        }
-
-        try
-        {
-            var removed = PruneOldRegistryBackups(baseDir, safe, retentionCount);
-            foreach (var removedPath in removed)
+            using var rootLease = OperationFileLease.Acquire(
+                Path.Combine(root, ".gsbt-operation.lock"),
+                TimeSpan.FromMinutes(10),
+                cancellationToken);
+            using var operationLock = CrossProcessLock.Acquire($"backup:{baseDir}:{displayName}", TimeSpan.FromMinutes(10));
+            Directory.CreateDirectory(stagingDir);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!TryExportKeyToRegFile(hive, subkey, stagingFile, cancellationToken, out var exportError))
             {
-                BackupRunManifestStore.DeleteManifestForBackupRun(removedPath);
+                TryDeleteRegistryStaging(stagingDir);
+                return RegistryFailure(displayName, registrySource, exportError ?? "Registry export failed.", runId: runId);
             }
-        }
-        catch
-        {
-            // best-effort retention
-        }
 
-        var stamp = DateTime.Now.ToString("yyyy-MM-dd_at_HH-mm-ss-fff");
-        var backupRunDir = Path.Combine(baseDir, $"{safe} - Backup {stamp}");
-        try
-        {
-            Directory.CreateDirectory(backupRunDir);
-        }
-        catch (Exception ex)
-        {
-            error = ex.Message;
-            return;
-        }
-
-        backupFilePath = Path.Combine(backupRunDir, $"{safe}.reg");
-
-        if (!TryExportKeyToRegFile(hive, subkey, backupFilePath, cancellationToken, out var exportErr))
-        {
-            error = exportErr;
-            try
+            if (!LooksLikeRegistryExport(stagingFile))
             {
-                if (Directory.Exists(backupRunDir))
+                TryDeleteRegistryStaging(stagingDir);
+                return RegistryFailure(displayName, registrySource, "Registry export did not contain a valid .reg header.", runId: runId);
+            }
+
+            Directory.Move(stagingDir, backupRunDir);
+            if (!BackupRunManifestStore.TryWriteManifest(
+                    displayName,
+                    registrySource,
+                    backupRunDir,
+                    out var checkpointError,
+                    sourceIsRegistry: true))
+            {
+                return new BackupOperationResult
                 {
-                    Directory.Delete(backupRunDir, recursive: true);
-                }
+                    GameName = displayName,
+                    Status = BackupOperationStatus.Partial,
+                    Source = registrySource,
+                    BackupPath = finalFile,
+                    RunId = runId,
+                    IsRegistry = true,
+                    FilesCopied = 1,
+                    BytesCopied = new FileInfo(finalFile).Length,
+                    Error = $"Registry export was created, but verification metadata could not be finalized: {checkpointError}",
+                };
             }
-            catch
-            {
-                // ignore cleanup
-            }
-        }
-        else
-        {
+
+            var warnings = PruneOldRegistryBackups(baseDir, safe, displayName, Math.Max(1, retentionCount));
             try
             {
                 DeleteLegacyFlatRegExports(baseDir, safe);
             }
-            catch
+            catch (Exception ex)
             {
-                // best-effort migration from older flat .reg layout
+                warnings.Add($"Could not remove a legacy registry export: {ex.Message}");
             }
 
-            BackupRunManifestStore.TryWriteManifest(
-                gameName,
-                RegistrySaveResolver.FormatRegistrySaveDisplay(hive, subkey),
-                backupRunDir);
+            return new BackupOperationResult
+            {
+                GameName = displayName,
+                Status = BackupOperationStatus.Succeeded,
+                Source = registrySource,
+                BackupPath = finalFile,
+                RunId = runId,
+                IsRegistry = true,
+                FilesCopied = 1,
+                BytesCopied = new FileInfo(finalFile).Length,
+                Warnings = warnings,
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            TryDeleteRegistryStaging(stagingDir);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            TryDeleteRegistryStaging(stagingDir);
+            return RegistryFailure(displayName, registrySource, ex.Message, finalFile, runId);
         }
     }
 
@@ -274,6 +335,8 @@ public sealed class RegistrySaveBackupService
                 proc.WaitForExit();
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (proc.ExitCode != 0)
             {
                 var err = proc.StandardError.ReadToEnd();
@@ -298,38 +361,104 @@ public sealed class RegistrySaveBackupService
         }
     }
 
-    private static List<string> PruneOldRegistryBackups(string baseDir, string safeName, int retentionCount)
+    private static List<string> PruneOldRegistryBackups(
+        string baseDir,
+        string safeName,
+        string gameName,
+        int retentionCount)
     {
-        var removed = new List<string>();
+        var warnings = new List<string>();
         if (retentionCount <= 0 || !Directory.Exists(baseDir))
         {
-            return removed;
+            return warnings;
         }
 
         var prefix = $"{safeName} - Backup";
-        var dirs = Directory.EnumerateDirectories(baseDir)
+        var candidates = Directory.EnumerateDirectories(baseDir)
             .Where(d => Path.GetFileName(d).StartsWith(prefix, StringComparison.Ordinal))
-            .Select(d => new DirectoryInfo(d))
-            .OrderBy(d => d.LastWriteTimeUtc)
+            .Select(d => new
+            {
+                Path = d,
+                Manifest = BackupRunManifestStore.TryReadManifest(d, out var manifest) ? manifest : null,
+            })
             .ToList();
 
-        while (dirs.Count >= retentionCount)
+        var hasDifferentOwner = candidates.Any(x =>
+            x.Manifest is not null
+            && !string.Equals(x.Manifest.GameName, gameName, StringComparison.OrdinalIgnoreCase));
+        var owned = candidates
+            .Where(x => x.Manifest is not null
+                ? string.Equals(x.Manifest.GameName, gameName, StringComparison.OrdinalIgnoreCase)
+                : !hasDifferentOwner)
+            .OrderBy(x => Directory.GetLastWriteTimeUtc(x.Path))
+            .ToList();
+
+        while (owned.Count > retentionCount)
         {
-            var oldest = dirs[0].FullName;
-            dirs.RemoveAt(0);
+            var oldest = owned[0].Path;
+            owned.RemoveAt(0);
             try
             {
                 Directory.Delete(oldest, recursive: true);
-                removed.Add(oldest);
+                BackupRunManifestStore.DeleteManifestForBackupRun(oldest);
             }
-            catch
+            catch (Exception ex)
             {
+                warnings.Add($"Could not prune old registry backup '{Path.GetFileName(oldest)}': {ex.Message}");
                 break;
             }
         }
 
-        return removed;
+        return warnings;
     }
+
+    private static bool LooksLikeRegistryExport(string path)
+    {
+        try
+        {
+            using var reader = new StreamReader(path, detectEncodingFromByteOrderMarks: true);
+            var first = reader.ReadLine();
+            return first?.StartsWith("Windows Registry Editor Version", StringComparison.OrdinalIgnoreCase) == true
+                || first?.StartsWith("REGEDIT4", StringComparison.OrdinalIgnoreCase) == true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void TryDeleteRegistryStaging(string path)
+    {
+        try
+        {
+            if (Path.GetFileName(path).StartsWith(".gsbt-staging-", StringComparison.Ordinal)
+                && Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch
+        {
+            // The unique staging path cannot replace a prior valid backup.
+        }
+    }
+
+    private static BackupOperationResult RegistryFailure(
+        string gameName,
+        string source,
+        string error,
+        string backupPath = "",
+        string runId = "") =>
+        new()
+        {
+            GameName = gameName,
+            Status = BackupOperationStatus.Failed,
+            Source = source,
+            BackupPath = backupPath,
+            RunId = runId,
+            IsRegistry = true,
+            Error = error,
+        };
 
     /// <summary>Removes pre-subfolder exports (<c>{Game} - Backup *.reg</c> directly under the game folder).</summary>
     private static void DeleteLegacyFlatRegExports(string baseDir, string safeName)

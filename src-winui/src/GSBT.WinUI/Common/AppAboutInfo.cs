@@ -1,3 +1,5 @@
+using GSBT.Core.Common;
+
 namespace GSBT.WinUI.Common;
 
 /// <summary>Credits and version text for the About dialog (mirror Python <c>app_metadata</c> + WinUI notes).</summary>
@@ -5,7 +7,7 @@ public static class AppAboutInfo
 {
     public const string AppName = "Game Save Backup Tool";
 
-    public const string VersionDisplay = "v0.1.3.260619";
+    public static string VersionDisplay => AppVersionInfo.DisplayVersion;
 
     public const string CopyrightLine = "© 2026 Xeworth";
 

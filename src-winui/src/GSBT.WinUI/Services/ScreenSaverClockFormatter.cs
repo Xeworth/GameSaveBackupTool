@@ -8,10 +8,13 @@ internal static class ScreenSaverClockFormatter
     public static (string TimeLine, string DateLine) FormatNow(string? dateFormatKey)
     {
         var now = DateTime.Now;
-        var key = (dateFormatKey ?? "iso").Trim().ToLowerInvariant();
+        var key = (dateFormatKey ?? GSBT.Core.Common.BackupDateFormatter.DefaultFormatKey).Trim().ToLowerInvariant();
         var month = now.ToString("MMM", CultureInfo.InvariantCulture).ToUpperInvariant();
         return key switch
         {
+            "system" => (
+                now.ToString("T", CultureInfo.CurrentCulture),
+                now.ToString("d", CultureInfo.CurrentCulture)),
             "us" => (
                 $"{now.ToString("tt", CultureInfo.InvariantCulture).ToUpperInvariant()} {now:hh:mm:ss}",
                 $"{month}. {now:dd} {now:yyyy}"),

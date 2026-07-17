@@ -12,6 +12,10 @@ public sealed class LudusaviManifestProvider
     private const string ManifestFilename = "ludusavi-save-manifest.json";
     private const string MetaFilename = "ludusavi-save-manifest.meta.json";
     private const int MaxManifestDownloadBytes = 64 * 1024 * 1024;
+    private const int MaxManifestGames = 100_000;
+    private const int MaxPathsPerGame = 128;
+    private const int MaxManifestPaths = 500_000;
+    private const int MaxManifestPathLength = 4096;
     private static readonly TimeSpan ManifestHttpTimeout = TimeSpan.FromMinutes(3);
     private static readonly Regex NameClean = new("[^a-z0-9]+", RegexOptions.Compiled);
 
@@ -34,6 +38,45 @@ public sealed class LudusaviManifestProvider
 
     public static string NormalizeManifestGameName(string name)
         => string.IsNullOrWhiteSpace(name) ? string.Empty : NameClean.Replace(name.Trim().ToLowerInvariant(), " ").Trim();
+
+    public ManifestProvenance GetProvenance()
+    {
+        var manifest = LoadManifestOfflineOnly();
+        var valid = ValidateCompiledManifest(manifest, out var validationError);
+        var meta = LoadMeta();
+        var source = meta.TryGetValue("source", out var recordedSource) && !string.IsNullOrWhiteSpace(recordedSource)
+            ? recordedSource
+            : meta.TryGetValue("etag", out var etag) && !string.IsNullOrWhiteSpace(etag)
+                ? "downloaded"
+                : File.Exists(_manifestPath)
+                    ? "bundled-or-legacy-cache"
+                    : "empty";
+        var version = manifest.TryGetProperty("version", out var versionElement)
+            ? versionElement.ToString()
+            : "unknown";
+        var generatedAtUtc = TryReadUnixTimestamp(manifest, "generated_at_unix");
+        var fetchedAtUtc = meta.TryGetValue("fetched_at_unix", out var fetched)
+            && long.TryParse(fetched, out var fetchedUnix)
+                ? DateTimeOffset.FromUnixTimeSeconds(fetchedUnix)
+                : (DateTimeOffset?)null;
+        var sourceUrl = manifest.TryGetProperty("source_url", out var urlElement)
+            ? urlElement.GetString()
+            : null;
+        var sanitizedPathsRemoved = meta.TryGetValue("sanitized_paths_removed", out var removedText)
+            && int.TryParse(removedText, out var removed)
+                ? removed
+                : 0;
+
+        return new ManifestProvenance(
+            source,
+            version,
+            generatedAtUtc,
+            fetchedAtUtc,
+            valid,
+            valid ? "validated" : validationError ?? "validation failed",
+            sourceUrl,
+            sanitizedPathsRemoved);
+    }
 
     public JsonElement LoadManifestOfflineOnly()
     {
@@ -62,22 +105,24 @@ public sealed class LudusaviManifestProvider
             // keep sync behavior around shared state
         }
 
-        var req = new HttpRequestMessage(HttpMethod.Get, ManifestUrl);
+        using var req = new HttpRequestMessage(HttpMethod.Get, ManifestUrl);
         var meta = LoadMeta();
         if (meta.TryGetValue("etag", out var etag) && !string.IsNullOrWhiteSpace(etag))
         {
             req.Headers.TryAddWithoutValidation("If-None-Match", etag);
         }
 
-        HttpResponseMessage resp;
+        HttpResponseMessage? response;
         try
         {
-            resp = await _httpClient.SendAsync(req, ct);
+            response = await _httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
         }
         catch
         {
             return "network_error";
         }
+
+        using var resp = response;
 
         if ((int)resp.StatusCode == 304)
         {
@@ -87,6 +132,7 @@ public sealed class LudusaviManifestProvider
                 return "not_modified_without_cache";
             }
 
+            meta = LoadMeta();
             meta["fetched_at_unix"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
             SaveMeta(meta);
             lock (_lock)
@@ -131,6 +177,10 @@ public sealed class LudusaviManifestProvider
         try
         {
             compiled = CompileYamlToCompactManifest(yaml);
+            if (!ValidateCompiledManifest(compiled, out _))
+            {
+                return "manifest_invalid";
+            }
         }
         catch
         {
@@ -141,7 +191,9 @@ public sealed class LudusaviManifestProvider
         var newMeta = new Dictionary<string, string>
         {
             ["fetched_at_unix"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(),
-            ["etag"] = resp.Headers.ETag?.Tag ?? string.Empty
+            ["etag"] = resp.Headers.ETag?.Tag ?? string.Empty,
+            ["source"] = "downloaded",
+            ["sanitized_paths_removed"] = "0",
         };
         SaveMeta(newMeta);
 
@@ -209,6 +261,7 @@ public sealed class LudusaviManifestProvider
         var steamIndex = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var totalGames = 0;
+        var totalPaths = 0;
 
         foreach (var (k, v) in root)
         {
@@ -219,6 +272,10 @@ public sealed class LudusaviManifestProvider
             }
 
             totalGames++;
+            if (totalGames > MaxManifestGames)
+            {
+                throw new InvalidDataException($"Manifest contains more than {MaxManifestGames} games.");
+            }
 
             if (entry.TryGetValue("alias", out var aliasObj) && aliasObj is string alias && !string.IsNullOrWhiteSpace(alias))
             {
@@ -246,9 +303,20 @@ public sealed class LudusaviManifestProvider
                 }
 
                 var translated = TranslateManifestPath(path.Trim());
+                if (!IsSafeManifestPathTemplate(translated))
+                {
+                    continue;
+                }
+
                 if (!savePaths.Contains(translated, StringComparer.OrdinalIgnoreCase))
                 {
+                    if (savePaths.Count >= MaxPathsPerGame || totalPaths >= MaxManifestPaths)
+                    {
+                        throw new InvalidDataException("Manifest path limits were exceeded.");
+                    }
+
                     savePaths.Add(translated);
+                    totalPaths++;
                 }
             }
 
@@ -372,6 +440,99 @@ public sealed class LudusaviManifestProvider
         return output.Replace('/', '\\');
     }
 
+    internal static bool IsSafeManifestPathTemplate(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path.Length > MaxManifestPathLength || path.IndexOf('\0') >= 0)
+        {
+            return false;
+        }
+
+        var normalized = path.Trim().Replace('/', '\\');
+        var segments = normalized.Split('\\', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (segments.Any(static segment => segment == ".."))
+        {
+            return false;
+        }
+
+        string[] unsafeRoots =
+        [
+            "~",
+            "%USERPROFILE%",
+            "%APPDATA%",
+            "%LOCALAPPDATA%",
+            "%PROGRAMDATA%",
+            "%PUBLIC%",
+            "%WINDIR%",
+            "%INSTALLATION_PATH%",
+        ];
+        if (unsafeRoots.Contains(normalized.TrimEnd('\\'), StringComparer.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (normalized.StartsWith("%WINDIR%", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (Path.IsPathRooted(normalized)
+            && string.Equals(
+                Path.GetPathRoot(normalized)?.TrimEnd('\\'),
+                normalized.TrimEnd('\\'),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool ValidateCompiledManifest(JsonElement manifest, out string? error)
+    {
+        error = null;
+        if (manifest.ValueKind != JsonValueKind.Object
+            || !manifest.TryGetProperty("name_index", out var names)
+            || names.ValueKind != JsonValueKind.Object
+            || !manifest.TryGetProperty("steam_index", out var steam)
+            || steam.ValueKind != JsonValueKind.Object)
+        {
+            error = "Manifest indexes are missing or malformed.";
+            return false;
+        }
+
+        var games = 0;
+        var paths = 0;
+        foreach (var index in new[] { names, steam })
+        {
+            foreach (var property in index.EnumerateObject())
+            {
+                games++;
+                if (games > MaxManifestGames * 2 || property.Value.ValueKind != JsonValueKind.Array)
+                {
+                    error = "Manifest index limits or shape are invalid.";
+                    return false;
+                }
+
+                var perGame = 0;
+                foreach (var value in property.Value.EnumerateArray())
+                {
+                    perGame++;
+                    paths++;
+                    if (value.ValueKind != JsonValueKind.String
+                        || !IsSafeManifestPathTemplate(value.GetString() ?? string.Empty)
+                        || perGame > MaxPathsPerGame
+                        || paths > MaxManifestPaths * 2)
+                    {
+                        error = "Manifest contains an unsafe path or exceeds path limits.";
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
     private JsonElement? SeedManifestFromBundle()
     {
         var path = _bundledManifestPath;
@@ -388,13 +549,20 @@ public sealed class LudusaviManifestProvider
         try
         {
             var raw = JsonDocument.Parse(File.ReadAllText(path)).RootElement.Clone();
-            SaveManifest(raw);
+            if (!TryPrepareManifest(raw, out var prepared, out var removed))
+            {
+                return null;
+            }
+
+            SaveManifest(prepared);
             SaveMeta(new Dictionary<string, string>
             {
                 ["fetched_at_unix"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(),
-                ["etag"] = string.Empty
+                ["etag"] = string.Empty,
+                ["source"] = "bundled",
+                ["sanitized_paths_removed"] = removed.ToString(),
             });
-            return raw;
+            return prepared;
         }
         catch
         {
@@ -411,7 +579,21 @@ public sealed class LudusaviManifestProvider
 
         try
         {
-            return JsonDocument.Parse(File.ReadAllText(_manifestPath)).RootElement.Clone();
+            var manifest = JsonDocument.Parse(File.ReadAllText(_manifestPath)).RootElement.Clone();
+            if (!TryPrepareManifest(manifest, out var prepared, out var removed))
+            {
+                return null;
+            }
+
+            if (removed > 0)
+            {
+                SaveManifest(prepared);
+                var meta = LoadMeta();
+                meta["sanitized_paths_removed"] = removed.ToString();
+                SaveMeta(meta);
+            }
+
+            return prepared;
         }
         catch
         {
@@ -428,6 +610,104 @@ public sealed class LudusaviManifestProvider
         name_index = new Dictionary<string, string[]>(),
         steam_index = new Dictionary<string, string[]>()
     });
+
+    private static bool TryPrepareManifest(
+        JsonElement manifest,
+        out JsonElement prepared,
+        out int removedPaths)
+    {
+        prepared = default;
+        removedPaths = 0;
+        if (ValidateCompiledManifest(manifest, out _))
+        {
+            prepared = manifest;
+            return true;
+        }
+
+        if (manifest.ValueKind != JsonValueKind.Object
+            || !manifest.TryGetProperty("name_index", out var names)
+            || names.ValueKind != JsonValueKind.Object
+            || !manifest.TryGetProperty("steam_index", out var steam)
+            || steam.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        var sanitizedNames = SanitizeIndex(names, ref removedPaths);
+        var sanitizedSteam = SanitizeIndex(steam, ref removedPaths);
+        if (sanitizedNames is null || sanitizedSteam is null)
+        {
+            return false;
+        }
+
+        var payload = new Dictionary<string, object?>
+        {
+            ["version"] = manifest.TryGetProperty("version", out var version) ? version.Clone() : 1,
+            ["generated_at_unix"] = manifest.TryGetProperty("generated_at_unix", out var generated) ? generated.Clone() : 0,
+            ["source_url"] = manifest.TryGetProperty("source_url", out var sourceUrl) ? sourceUrl.Clone() : ManifestUrl,
+            ["stats"] = manifest.TryGetProperty("stats", out var stats) ? stats.Clone() : new { },
+            ["name_index"] = sanitizedNames,
+            ["steam_index"] = sanitizedSteam,
+        };
+        prepared = JsonSerializer.SerializeToElement(payload);
+        return removedPaths > 0 && ValidateCompiledManifest(prepared, out _);
+    }
+
+    private static Dictionary<string, string[]>? SanitizeIndex(JsonElement index, ref int removedPaths)
+    {
+        var result = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+        var entries = 0;
+        var paths = 0;
+        foreach (var property in index.EnumerateObject())
+        {
+            entries++;
+            if (entries > MaxManifestGames * 2 || property.Value.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            var safe = property.Value.EnumerateArray()
+                .Where(static value => value.ValueKind == JsonValueKind.String)
+                .Select(static value => value.GetString() ?? string.Empty)
+                .Where(IsSafeManifestPathTemplate)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(MaxPathsPerGame + 1)
+                .ToArray();
+            var originalCount = property.Value.GetArrayLength();
+            removedPaths += originalCount - safe.Length;
+            paths += safe.Length;
+            if (safe.Length > MaxPathsPerGame || paths > MaxManifestPaths * 2)
+            {
+                return null;
+            }
+
+            if (safe.Length > 0)
+            {
+                result[property.Name] = safe;
+            }
+        }
+
+        return result;
+    }
+
+    private static DateTimeOffset? TryReadUnixTimestamp(JsonElement manifest, string propertyName)
+    {
+        if (!manifest.TryGetProperty(propertyName, out var value)
+            || !value.TryGetInt64(out var unix)
+            || unix <= 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            return DateTimeOffset.FromUnixTimeSeconds(unix);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return null;
+        }
+    }
 
     private Dictionary<string, string> LoadMeta()
     {
@@ -455,7 +735,22 @@ public sealed class LudusaviManifestProvider
 
     private void SaveManifest(JsonElement manifest)
     {
+        if (!ValidateCompiledManifest(manifest, out var error))
+        {
+            throw new InvalidDataException(error ?? "Manifest validation failed.");
+        }
+
         Directory.CreateDirectory(_dataDir);
         AtomicFileWrite.WriteAllText(_manifestPath, JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
     }
 }
+
+public sealed record ManifestProvenance(
+    string Source,
+    string Version,
+    DateTimeOffset? GeneratedAtUtc,
+    DateTimeOffset? FetchedAtUtc,
+    bool IsValid,
+    string ValidationStatus,
+    string? SourceUrl,
+    int SanitizedPathsRemoved);

@@ -1,13 +1,18 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using GSBT.Core.Common;
 using GSBT.Core.Services;
 using GSBT.WinUI;
+using GSBT.WinUI.Controls;
 
 namespace GSBT.WinUI.Services;
 
 internal static class SandboxBenchmarkFormat
 {
-    public static SandboxCompressionBenchmarkEntry FromResult(string backupRootDisplay, BackupCompressionResult r)
+    public static SandboxCompressionBenchmarkEntry FromResult(
+        string backupRootDisplay,
+        BackupCompressionResult r,
+        SandboxPerformanceSummary? performance = null)
     {
         var wall = r.WallSeconds;
         var raw = r.RawBytes;
@@ -22,6 +27,7 @@ internal static class SandboxBenchmarkFormat
         var priorityLines = new[]
         {
             $"Engine: {o.Engine}  |  {o.SummaryLabel}",
+            $"Compression type: {(o.SolidArchive ? "Chunky" : "Smooth")}",
             $"Time elapsed: {wall:F3} s",
             $"Raw size: {_human(raw)} ({raw:N0} bytes)",
             $"Archive size: {_human(arch)} ({arch:N0} bytes)",
@@ -30,11 +36,22 @@ internal static class SandboxBenchmarkFormat
         };
         var extraLines = new List<string>
         {
-            $"When (UTC): {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}",
+            $"Timestamp (UTC): {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}",
             $"Backup folder: {backupRootDisplay}",
             $"Archive file: {archiveName}",
             $"Outcome: {(r.Success ? "OK" : "Error")} — {r.Message}",
         };
+        if (performance is not null)
+        {
+            extraLines.AddRange(
+                [
+                    $"Max CPU usage: {performance.MaxCpuPercent:0.#}%",
+                    $"Avg CPU usage: {performance.AvgCpuPercent:0.#}%",
+                    $"Max RAM usage: {PerformanceChartRamFormatter.FormatSize(performance.MaxRamMiB)}",
+                    $"Avg RAM usage: {PerformanceChartRamFormatter.FormatSize(performance.AvgRamMiB)}",
+                ]);
+        }
+
         var priorityText = string.Join(Environment.NewLine, priorityLines);
         var extraText = string.Join(Environment.NewLine, extraLines);
         return new SandboxCompressionBenchmarkEntry
@@ -53,6 +70,10 @@ internal static class SandboxBenchmarkFormat
             ArchiveBytes = arch,
             Engine = o.Engine,
             OptionsSummary = o.SummaryLabel,
+            MaxCpuUsagePercent = performance?.MaxCpuPercent,
+            AvgCpuUsagePercent = performance?.AvgCpuPercent,
+            MaxRamUsageMiB = performance?.MaxRamMiB,
+            AvgRamUsageMiB = performance?.AvgRamMiB,
         };
     }
 
@@ -78,7 +99,7 @@ internal static class SandboxBenchmarkFormat
     }
 }
 
-/// <summary>Persists Sandbox monitor → Benchmark tab rows under %AppData%\Game Save Backup Tool\winui.</summary>
+/// <summary>Persists Sandbox monitor → Benchmark results tab rows under %AppData%\Game Save Backup Tool\winui.</summary>
 public sealed class SandboxCompressionBenchmarkStore
 {
     private readonly JsonSerializerOptions _json = new()
@@ -130,11 +151,16 @@ public sealed class SandboxCompressionBenchmarkStore
                 Directory.CreateDirectory(AppPaths.WinUiUserDataRoot);
                 var path = AppPaths.SandboxCompressionBenchmarksPath;
                 var ordered = entries.OrderByDescending(e => e.UtcTicks).Take(200).ToList();
-                var dto = new BenchmarkFileDto { Schema = 1, Entries = ordered };
+                var dto = new BenchmarkFileDto
+                {
+                    Schema = 2,
+                    WriterVersion = AppVersionInfo.RawVersion,
+                    Entries = ordered,
+                };
                 var json = JsonSerializer.Serialize(dto, _json);
                 lock (_gate)
                 {
-                    File.WriteAllText(path, json);
+                    AtomicFileWrite.WriteAllText(path, json);
                 }
             },
             cancellationToken);
@@ -203,13 +229,19 @@ public sealed class SandboxCompressionBenchmarkStore
 
     public string ExportEntriesJson(IReadOnlyList<SandboxCompressionBenchmarkEntry> entries)
     {
-        var dto = new BenchmarkFileDto { Schema = 1, Entries = entries.OrderByDescending(e => e.UtcTicks).ToList() };
+        var dto = new BenchmarkFileDto
+        {
+            Schema = 2,
+            WriterVersion = AppVersionInfo.RawVersion,
+            Entries = entries.OrderByDescending(e => e.UtcTicks).ToList(),
+        };
         return JsonSerializer.Serialize(dto, _json);
     }
 
     private sealed class BenchmarkFileDto
     {
         public int Schema { get; set; }
+        public string? WriterVersion { get; set; }
         public List<SandboxCompressionBenchmarkEntry> Entries { get; set; } = new();
     }
 }
@@ -226,6 +258,10 @@ public sealed class SandboxCompressionBenchmarkEntry
     public double? WallSeconds { get; set; }
     public long? RawBytes { get; set; }
     public long? ArchiveBytes { get; set; }
+    public double? MaxCpuUsagePercent { get; set; }
+    public double? AvgCpuUsagePercent { get; set; }
+    public double? MaxRamUsageMiB { get; set; }
+    public double? AvgRamUsageMiB { get; set; }
     public string Engine { get; set; } = string.Empty;
     public string OptionsSummary { get; set; } = string.Empty;
 

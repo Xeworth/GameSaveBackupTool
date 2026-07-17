@@ -32,7 +32,7 @@
 
             <SolidColorBrush x:Key="GsbtSecondaryLabelBrush" Color="#FF767676" />
 
-            <SolidColorBrush x:Key="GsbtTableHeaderBgBrush" Color="#FFF5F5F5" />
+            <SolidColorBrush x:Key="GsbtTableHeaderBgBrush" Color="#FFECECEC" />
 
             <SolidColorBrush x:Key="GsbtTableGridLineBrush" Color="#FFD0D0D0" />
 

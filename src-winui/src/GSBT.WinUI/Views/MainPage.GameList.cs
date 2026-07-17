@@ -8,9 +8,7 @@ using GSBT.WinUI.ViewModels;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
-using Windows.Storage.Pickers;
 using Windows.System;
-using WinRT.Interop;
 
 namespace GSBT.WinUI.Views;
 
@@ -192,6 +190,32 @@ public sealed partial class MainPage
             };
             secondary.Add(openBackup);
 
+            var restore = new MenuFlyoutItem { Text = "Restore..." };
+            restore.IsEnabled = ViewModel.CanCompressRowForUi(vm);
+            restore.Click += async (_, _) => await RunRestoreWorkflowAsync(vm);
+            secondary.Add(restore);
+
+            var verify = new MenuFlyoutItem { Text = "Verify latest backup" };
+            verify.IsEnabled = ViewModel.CanCompressRowForUi(vm);
+            verify.Click += async (_, _) =>
+            {
+                var result = await ViewModel.VerifyLatestBackupAsync(vm);
+                if (result is null)
+                {
+                    await ShowStatusToastAsync("No retained backup snapshot is available for this game.");
+                    return;
+                }
+
+                var message = result.IsValid
+                    ? $"Backup verified: {result.CheckedFiles:N0} file(s) are intact."
+                    : $"Backup verification failed: {result.Issues.FirstOrDefault()?.Message ?? "unknown integrity error"}";
+                await ShowStatusToastAsync(
+                    message,
+                    result.IsValid ? 5000 : 8000,
+                    severity: result.IsValid ? BackupToastSeverity.Neutral : BackupToastSeverity.Error);
+            };
+            secondary.Add(verify);
+
             if (vm.IsUserAdded)
             {
                 var rename = new MenuFlyoutItem { Text = "Rename…" };
@@ -214,6 +238,7 @@ public sealed partial class MainPage
                 var addPath = new MenuFlyoutItem { Text = "Add save folder…" };
                 addPath.Click += async (_, _) =>
                 {
+                    await WaitForFlyoutToCloseAsync(flyout);
                     var path = await PickFolderWithPickerAsync();
                     if (string.IsNullOrWhiteSpace(path))
                     {
@@ -263,19 +288,38 @@ public sealed partial class MainPage
 
     private async Task<string?> PickFolderWithPickerAsync()
     {
+        var result = await OwnedFolderPicker.PickSingleFolderAsync(App.MainWindowRef);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+        {
+            await ShowStatusToastAsync($"Could not open folder picker: {result.Error}");
+        }
+
+        return result.Path;
+    }
+
+    private static async Task WaitForFlyoutToCloseAsync(FlyoutBase flyout)
+    {
+        if (!flyout.IsOpen)
+        {
+            await Task.Yield();
+            return;
+        }
+
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnClosed(object? sender, object args) => closed.TrySetResult();
+
+        flyout.Closed += OnClosed;
         try
         {
-            var picker = new FolderPicker();
-            picker.FileTypeFilter.Add("*");
-            var hwnd = WindowNative.GetWindowHandle(App.MainWindowRef);
-            InitializeWithWindow.Initialize(picker, hwnd);
-            var folder = await picker.PickSingleFolderAsync();
-            return folder?.Path;
+            flyout.Hide();
+            await Task.WhenAny(closed.Task, Task.Delay(500));
         }
-        catch
+        finally
         {
-            return null;
+            flyout.Closed -= OnClosed;
         }
+
+        await Task.Yield();
     }
 
     /// <summary>Backup toolbar, Ctrl+B, row context menu, and tray Backup share this flow.</summary>

@@ -24,11 +24,6 @@
                     <SymbolIcon Symbol="SwitchApps" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
-            <NavigationViewItem Content="Benchmark" Tag="benchmark">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Clock" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
             <NavigationViewItem Content="Batch benchmark" Tag="batch">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="AllApps" />
@@ -37,6 +32,11 @@
             <NavigationViewItem x:Name="PerformanceNavItem" Content="Performance" Tag="performance">
                 <NavigationViewItem.Icon>
                     <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE9D9;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Benchmark results" Tag="benchmark">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Clock" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
             <NavigationViewItem Content="Log" Tag="log">

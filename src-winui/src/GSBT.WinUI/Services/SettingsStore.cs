@@ -12,6 +12,8 @@ public sealed class SettingsStore
     private readonly object _lock = new();
     private readonly string _path;
     private Dictionary<string, JsonElement> _data;
+    private DateTime _loadedWriteUtc;
+    private long _loadedLength;
 
     /// <summary>Default Roaming GSBT WinUI settings path.</summary>
     public SettingsStore()
@@ -39,6 +41,7 @@ public sealed class SettingsStore
         }
 
         _data = LoadUnsafe();
+        CaptureFileStampUnsafe();
     }
 
     /// <summary>Full path to winui_settings.json (for diagnostics).</summary>
@@ -48,6 +51,7 @@ public sealed class SettingsStore
     {
         lock (_lock)
         {
+            RefreshIfChangedUnsafe();
             return _data.ContainsKey(key);
         }
     }
@@ -56,6 +60,7 @@ public sealed class SettingsStore
     {
         lock (_lock)
         {
+            RefreshIfChangedUnsafe();
             if (!_data.TryGetValue(key, out var el))
             {
                 return fallback;
@@ -76,7 +81,10 @@ public sealed class SettingsStore
     {
         lock (_lock)
         {
+            using var processLock = CrossProcessLock.Acquire("file:" + Path.GetFullPath(_path));
+            _data = LoadUnsafe();
             _data[key] = JsonSerializer.SerializeToElement(value);
+            _data["_schema_version"] = JsonSerializer.SerializeToElement(1);
             PersistUnsafe();
         }
     }
@@ -132,7 +140,17 @@ public sealed class SettingsStore
         }
         catch
         {
-            return [];
+            try
+            {
+                var backup = _path + ".bak";
+                return File.Exists(backup)
+                    ? JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(File.ReadAllText(backup)) ?? []
+                    : [];
+            }
+            catch
+            {
+                return [];
+            }
         }
     }
 
@@ -140,5 +158,42 @@ public sealed class SettingsStore
     {
         var json = JsonSerializer.Serialize(_data, new JsonSerializerOptions { WriteIndented = true });
         AtomicFileWrite.WriteAllText(_path, json);
+        CaptureFileStampUnsafe();
+    }
+
+    private void RefreshIfChangedUnsafe()
+    {
+        try
+        {
+            if (!File.Exists(_path))
+            {
+                return;
+            }
+
+            var info = new FileInfo(_path);
+            if (info.LastWriteTimeUtc != _loadedWriteUtc || info.Length != _loadedLength)
+            {
+                _data = LoadUnsafe();
+                CaptureFileStampUnsafe();
+            }
+        }
+        catch
+        {
+            // Keep the last readable in-memory settings snapshot.
+        }
+    }
+
+    private void CaptureFileStampUnsafe()
+    {
+        if (!File.Exists(_path))
+        {
+            _loadedWriteUtc = DateTime.MinValue;
+            _loadedLength = 0;
+            return;
+        }
+
+        var info = new FileInfo(_path);
+        _loadedWriteUtc = info.LastWriteTimeUtc;
+        _loadedLength = info.Length;
     }
 }

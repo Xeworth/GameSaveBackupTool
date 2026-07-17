@@ -62,6 +62,7 @@ public sealed partial class GameTableView : UserControl
     private bool _rowDragActive;
     private int _rowDragAnchorIndex;
     private bool _rowDragAdditive;
+    private ListViewItem? _rowDragCaptureItem;
 
     /// <summary>Avoids re-applying the same range every pointer move (reduces jitter).</summary>
     private int _lastAppliedDragHitIndex = -1;
@@ -856,7 +857,16 @@ public sealed partial class GameTableView : UserControl
                 GamesGrid.SelectedItems.Add(vm);
             }
 
-            ListHost.CapturePointer(e.Pointer);
+            // Keep capture on the anchor item so its native pressed visual receives PointerReleased.
+            if (listItem.CapturePointer(e.Pointer))
+            {
+                _rowDragCaptureItem = listItem;
+            }
+            else
+            {
+                _rowDragCaptureItem = null;
+                ListHost.CapturePointer(e.Pointer);
+            }
             e.Handled = true;
             return;
         }
@@ -895,7 +905,15 @@ public sealed partial class GameTableView : UserControl
     {
         if (_rowDragActive && e.Pointer.PointerId == _listPointerId)
         {
-            ListHost.ReleasePointerCapture(e.Pointer);
+            if (_rowDragCaptureItem is not null)
+            {
+                _rowDragCaptureItem.ReleasePointerCapture(e.Pointer);
+                _rowDragCaptureItem = null;
+            }
+            else
+            {
+                ListHost.ReleasePointerCapture(e.Pointer);
+            }
             _rowDragActive = false;
             _lastAppliedDragHitIndex = -1;
             e.Handled = true;
@@ -921,7 +939,15 @@ public sealed partial class GameTableView : UserControl
             return;
         }
 
-        ListHost.ReleasePointerCapture(e.Pointer);
+        if (_rowDragCaptureItem is not null)
+        {
+            _rowDragCaptureItem.ReleasePointerCapture(e.Pointer);
+            _rowDragCaptureItem = null;
+        }
+        else
+        {
+            ListHost.ReleasePointerCapture(e.Pointer);
+        }
         _listEmptyAreaCapture = false;
         _rowDragActive = false;
         _lastAppliedDragHitIndex = -1;

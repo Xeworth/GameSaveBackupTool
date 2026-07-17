@@ -32,7 +32,7 @@ internal sealed class CompressionScreenSaverController : IDisposable
         _settings = settings;
         _watchTimer = dispatcher.CreateTimer();
         _watchTimer.Interval = TimeSpan.FromMilliseconds(250);
-        _watchTimer.Tick += (_, _) => OnWatchTick();
+        _watchTimer.Tick += WatchTimer_Tick;
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
     }
 
@@ -140,6 +140,8 @@ internal sealed class CompressionScreenSaverController : IDisposable
         }
     }
 
+    private void WatchTimer_Tick(DispatcherQueueTimer sender, object args) => OnWatchTick();
+
     private void EndActive()
     {
         _isActive = false;
@@ -158,6 +160,7 @@ internal sealed class CompressionScreenSaverController : IDisposable
     public void Dispose()
     {
         _watchTimer.Stop();
+        _watchTimer.Tick -= WatchTimer_Tick;
         _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
     }
 }

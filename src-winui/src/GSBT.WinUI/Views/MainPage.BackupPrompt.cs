@@ -8,7 +8,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI;
 using Microsoft.UI.Text;
-using WinRT.Interop;
 namespace GSBT.WinUI.Views;
 
 public sealed partial class MainPage
@@ -65,21 +64,14 @@ public sealed partial class MainPage
         var browse = new Button { Content = "Browse…", MinWidth = 88 };
         browse.Click += async (_, _) =>
         {
-            try
+            var result = await OwnedFolderPicker.PickSingleFolderAsync(App.MainWindowRef);
+            if (result.Succeeded)
             {
-                var picker = new Windows.Storage.Pickers.FolderPicker();
-                picker.FileTypeFilter.Add("*");
-                var hwnd = WindowNative.GetWindowHandle(App.MainWindowRef);
-                InitializeWithWindow.Initialize(picker, hwnd);
-                var folder = await picker.PickSingleFolderAsync();
-                if (folder is not null)
-                {
-                    pathBox.Text = folder.Path;
-                }
+                pathBox.Text = result.Path!;
             }
-            catch
+            else if (!string.IsNullOrWhiteSpace(result.Error))
             {
-                // ignore
+                await ShowStatusToastAsync($"Could not open folder picker: {result.Error}");
             }
         };
 
@@ -475,21 +467,14 @@ public sealed partial class MainPage
         {
             diskRadio.IsChecked = true;
             ApplySaveModeUi();
-            try
+            var result = await OwnedFolderPicker.PickSingleFolderAsync(App.MainWindowRef);
+            if (result.Succeeded)
             {
-                var picker = new Windows.Storage.Pickers.FolderPicker();
-                picker.FileTypeFilter.Add("*");
-                var hwnd = WindowNative.GetWindowHandle(App.MainWindowRef);
-                InitializeWithWindow.Initialize(picker, hwnd);
-                var folder = await picker.PickSingleFolderAsync();
-                if (folder is not null)
-                {
-                    folderBox.Text = folder.Path;
-                }
+                folderBox.Text = result.Path!;
             }
-            catch
+            else if (!string.IsNullOrWhiteSpace(result.Error))
             {
-                // ignore
+                await ShowStatusToastAsync($"Could not open folder picker: {result.Error}");
             }
         };
 

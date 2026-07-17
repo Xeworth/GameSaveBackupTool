@@ -32,7 +32,7 @@ public sealed partial class MainViewModel
         };
         _sandboxLog.Log("scan", StatusText);
         IsBusy = false;
-        await StartScanAsync();
+        await StartScanAsync(fullRescan: true);
     }
 
     private async Task RunSandboxSimulationScanAsync()
@@ -92,7 +92,7 @@ public sealed partial class MainViewModel
         }
     }
 
-    public async Task StartScanAsync()
+    public async Task StartScanAsync(bool fullRescan = false)
     {
         if (IsScanning)
         {
@@ -138,7 +138,11 @@ public sealed partial class MainViewModel
             return;
         }
 
-        var toScan = CatalogAwareDetectionFilter.FilterForRescan(detected, _catalogManager.Catalog, skipWhenPreviouslyNotFound: true);
+        _catalogManager.NormalizeDetectedDisplayNames();
+        var toScan = CatalogAwareDetectionFilter.FilterForRescan(
+            detected,
+            _catalogManager.Catalog,
+            skipWhenPreviouslyNotFound: !fullRescan);
         var skippedCount = detected.Count - toScan.Count;
         if (skippedCount > 0)
         {

@@ -1,84 +1,73 @@
-# Privacy — Game Save Backup Tool (GSBT)
+# Privacy - Game Save Backup Tool (GSBT)
 
-GSBT is a **local-first** Windows desktop app. It does not include analytics, advertising, or account sign-in. This document describes what data the app stores and what it sends over the network.
+GSBT is a local-first Windows desktop app. It does not include analytics, advertising, account sign-in, or a GSBT cloud service.
 
 ## Summary
 
 | Topic | Behavior |
-|--------|----------|
-| **Telemetry** | None built in |
-| **Account / cloud** | None |
-| **Save file contents** | Read from your PC for backup; not uploaded |
-| **Network** | Optional: Ludusavi manifest refresh (GitHub) only |
+|-------|----------|
+| Telemetry | None built in |
+| Account or cloud | None |
+| Save file contents | Read locally for backup, verification, compression, and an explicitly confirmed restore; not uploaded |
+| Network | Optional Ludusavi manifest refresh and explicit CLI-to-GUI installation through GitHub |
 
-## Data stored on your PC
+## Data Stored On Your PC
 
-All persistent WinUI app data lives under:
+Persistent app data lives under `%AppData%\Game Save Backup Tool\winui\`. Older `%AppData%\GSBT\` data is migrated on first launch.
 
-`%AppData%\Game Save Backup Tool\winui\`
+| File or folder | Purpose |
+|----------------|---------|
+| `winui_settings.json` | UI preferences, paths, compression, and auto-backup settings |
+| `game_save_data.json` | Game names, detected save/registry locations, and last-backup timestamps |
+| `game_save_data.json.meta.json` | Catalog schema and writer-version metadata |
+| `ludusavi-save-manifest.json` | Validated cached save-location index |
+| `ludusavi-save-manifest.meta.json` | Manifest source/ETag/fetch metadata |
+| `backup_run_checkpoints\` | Snapshot paths, sizes, timestamps, and content hashes; not save contents |
+| `logs\operations.ndjson` | Local backup/compress/verify/restore/GUI-install outcomes |
+| `logs\winui_last_error.txt` | Last local crash text, which may include file paths |
 
-(Older builds used `%AppData%\GSBT\`; the app migrates that folder on first launch after the rename.)
+Ephemeral sandbox data may appear under `%LocalAppData%\Game Save Backup Tool\gsbt\`.
 
-Typical files:
+Actual backups are written only to the folder selected by the user. The first-run suggestion is `Documents\gsbt-backups\`. Installed application files normally live under `%LocalAppData%\Game Save Backup Tool\`.
 
-| File / folder | Purpose |
-|---------------|---------|
-| `winui_settings.json` | UI preferences, backup folder path, compression options, auto-backup settings |
-| `game_save_data.json` | Game names, detected save paths, registry hints, last-backup timestamps |
-| `ludusavi-save-manifest.json` | Cached save-location index (from bundled copy and/or online refresh) |
-| `ludusavi-save-manifest.meta.json` | Manifest cache metadata (e.g. ETag, last fetch time) |
-| `backup_run_checkpoints\` | Per-backup **metadata** (paths, sizes, timestamps) — not save file contents |
-| `logs\winui_last_error.txt` | Last crash / unhandled exception text (may include file paths) |
+## Network Use
 
-Ephemeral sandbox simulation data may appear under:
+Core backup, verification, compression, and restore work offline when a local manifest is available.
 
-`%LocalAppData%\Game Save Backup Tool\gsbt\`
+| User action | Endpoint | Purpose |
+|-------------|----------|---------|
+| Download latest manifest and rescan | `raw.githubusercontent.com` | Download the Ludusavi manifest |
+| `gsbt get gui` | `api.github.com`, `github.com`, and GitHub release asset hosts | Resolve and download the full GSBT installer |
+| IRM installation script | `raw.githubusercontent.com`, GitHub API, and GitHub release asset hosts | Download and run a selected GSBT package |
 
-Your **actual backups** are written only to the backup folder you choose in Settings (default: `Documents\gsbt-backups\` unless you change it).
+Custom GUI installer hosts are rejected by default. The CLI requires an explicit `--allow-custom-host` override for a non-GitHub HTTPS URL.
 
-Installed edition files (including bundled `7z.dll`) live under:
+Compression uses the bundled `7z.dll`; GSBT does not download 7-Zip. There are no analytics or tracking endpoints.
 
-`%ProgramFiles%\Game Save Backup Tool\`
+## File System And Registry Access
 
-## Network use
+- Reads installed-game hints from local launchers, folders, and Windows registry locations.
+- Reads save folders selected or detected for backup and verification.
+- Exports configured registry save keys to `.reg` files.
+- Compresses backup data into `.7z` archives.
+- Restores only after an explicit preview and confirmation. Folder restore uses staging, rollback, and a pre-restore safety snapshot. Registry restore creates a safety export first.
+- A redacted diagnostics export omits stored backup/save paths from its report.
 
-GSBT works offline for core features if a manifest is already on disk (the app ships a bundled manifest).
+These operations stay on the local machine unless the user moves or uploads the resulting files.
 
-| When | Endpoint | Why |
-|------|----------|-----|
-| You choose **Download latest manifest and rescan** | `raw.githubusercontent.com` (Ludusavi manifest) | Update save-location database |
-
-Compression uses a **bundled** `7z.dll` shipped with the app. GSBT does **not** download 7-Zip installers or phone home for compression.
-
-No other third-party analytics or tracking endpoints are used by the application code reviewed for this document.
-
-## What is not collected
+## What Is Not Collected
 
 - No usage analytics SDK
-- No crash reporting service (only local `winui_last_error.txt` on failure)
-- No upload of save games, registry exports, or backup archives to GSBT servers (there are no GSBT servers)
+- No remote crash-reporting service
+- No upload of saves, registry exports, archives, manifests, settings, or diagnostics to GSBT servers
 
-## Registry and file system access
+## User Choices
 
-- Reads installed-game hints (Steam, GOG Galaxy, uninstall registry, etc.) to build the game list
-- Reads save folders you scan or assign
-- May **export** registry subtrees you configure for registry-based saves (`.reg` files in your backup folder)
-- May compress backups using bundled **7z.dll** (`.7z`) or built-in ZIP
+- Keep manifest refresh and GUI installation offline by not invoking them.
+- Turn off auto-backup.
+- Choose and move backup data independently of GSBT.
+- Delete `%AppData%\Game Save Backup Tool\`, the LocalAppData installation/cache, and the selected backup folder.
 
-These operations stay on your machine unless **you** copy backup files elsewhere.
+For privacy questions, open an issue in the repository listed in [README.md](README.md).
 
-## Sandbox / developer mode
-
-Launching with `-s` or `GSBT_SANDBOX=1` enables extra developer UI (monitor, simulated games). That mode is optional and not required for normal backups. See [src-winui/docs/SANDBOX.md](src-winui/docs/SANDBOX.md).
-
-## Your choices
-
-- Turn off auto-backup and manifest refresh if you want minimal network use
-- Choose backup and compression paths yourself
-- Delete `%AppData%\Game Save Backup Tool\` (and legacy `%AppData%\GSBT\` if still present) and your backup folder at any time to remove local app data
-
-## Contact
-
-For privacy questions about this open-source project, open an issue on the GitHub repository listed in [README.md](README.md).
-
-*Last updated: June 2026 — aligned with GSBT v0.1.2.*
+Last updated: July 2026, aligned with GSBT v0.3.2.

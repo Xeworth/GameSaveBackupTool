@@ -24,6 +24,7 @@ Thumbs.db
 .cursor/
 
 # .NET / Visual Studio
+.dotnet/
 **/bin/
 **/obj/
 **/publish/
@@ -36,6 +37,7 @@ project.fragment.lock.json
 *.nupkg
 *.snupkg
 *.cache
+work/
 
 # Local logs
 src-winui/logs/*.txt
@@ -63,6 +65,17 @@ installer/output/
 # Local scratch / session notes (never commit)
 new-compression.txt
 **/New-Session-Implementations.txt
+todo.txt
+
+# The standalone CLI is maintained and pushed as its own Git repository.
+src-cli-win/
+
+# Retired local-only placeholders and historical WinUI notes.
+/src-tui/
+/docs/winui/
+
+# Local benchmark evidence contains machine-specific paths; publish summaries in docs instead.
+src-winui/docs/benchmarks/
 
 # Crash dumps
 *.dmp

@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 1,
+  "notebookVersion": "2026-07-17.2",
+  "audience": "ai-agent",
+  "visibility": "machine-facing",
+  "purpose": "Ground AI answers and live reports in GSBT-specific behavior observed by the project owner and verified by tests.",
+  "topics": {
+    "compressionProgress": {
+      "summary": "Compression percentages describe native 7-Zip phases. A temporarily unchanged percentage is not enough to diagnose a hang.",
+      "eventSemantics": {
+        "changedPercent": "Normal forward progress.",
+        "heartbeat": "The GSBT process is alive and still working at the reported percentage. The percentage did not advance.",
+        "complete": "Compression ended. Use the final stdout JSON to determine success and obtain the archive path.",
+        "failed": "Compression ended unsuccessfully. Report the explicit error from the event or final result."
+      },
+      "knownBehaviors": [
+        {
+          "id": "compression.chunky-large-batch-plateau",
+          "title": "Chunky compression may pause at a coarse progress point",
+          "confidence": "observed-and-expected",
+          "appliesWhen": [
+            "compressionMode is chunky",
+            "the archive contains a large or mixed batch of files"
+          ],
+          "behavior": "Chunky compression can remain at one percentage while 7-Zip processes a large solid-compression phase. CPU, RAM, storage, file sizes, and file count can move the plateau to a different percentage.",
+          "observedExample": "On the project owner's 12-game development benchmark, chunky mx7 and mx9 paused near 75% for about 44 seconds before continuing. Chunky mx5 paused mainly near 99% for about 17 seconds.",
+          "agentGuidance": "Tell the user that this is a known chunky-compression behavior for larger batches, confirm that heartbeat events show GSBT is still working, and continue monitoring.",
+          "doNotAssume": "Do not hardcode 75% as universal and do not diagnose a hang from an unchanged percentage while heartbeat events continue."
+        },
+        {
+          "id": "compression.archive-finalization",
+          "title": "Archive finalization may remain at 99%",
+          "confidence": "observed-and-expected",
+          "behavior": "After file compression is nearly complete, 7-Zip may spend additional time finalizing archive metadata and output at 99%.",
+          "agentGuidance": "Describe a 99% heartbeat as archive finalization and continue monitoring until final stdout JSON or an explicit failure is received."
+        },
+        {
+          "id": "compression.progress-plateau",
+          "title": "Heartbeat means alive, not advanced",
+          "confidence": "contract",
+          "behavior": "GSBT emits a heartbeat every 15 seconds when the compression percentage has not changed, including when the native compressor sends no callback.",
+          "agentGuidance": "Use the heartbeat as a liveness signal. Do not claim that progress advanced and do not claim success before the final result."
+        }
+      ],
+      "failureBoundary": "Treat compression as failed only after an explicit failed event, cancellation, failed process exit, or final stdout JSON with success false. A plateau alone is not a failure."
+    },
+    "productScope": {
+      "id": "product.custom-folder-backups",
+      "summary": "GSBT is optimized for game saves, but a custom entry can back up any existing user-selected folder. The product boundary is user-owned folder data, not only files that a game labels as saves.",
+      "goodCandidates": [
+        "Game saves that automatic discovery missed",
+        "Custom maps, campaigns, mods, presets, profiles, screenshots, and editor projects",
+        "Emulator saves and user-created content",
+        "Small application profiles, templates, and other durable personal folders"
+      ],
+      "command": "gsbt add custom \"Descriptive Name\" \"<verified-existing-folder>\" --ai",
+      "agentGuidance": "Suggest custom-folder backup when the user identifies durable local data that GSBT did not discover. Explain what will be included, obtain approval for the exact folder, register it, run a targeted first backup, and verify the result.",
+      "limitations": [
+        "GSBT copies folder contents; it is not an application-aware export tool or a replacement for source control.",
+        "A single custom entry represents one folder. Create separate descriptive entries when unrelated data needs separate retention or restore boundaries.",
+        "Files actively locked or mutated by another application may require that application to be closed or its own export workflow."
+      ]
+    },
+    "missingDataDiscovery": {
+      "id": "discovery.missing-save-or-content",
+      "trigger": "Use this workflow when a game is listed as not found, the expected saves are absent, the title is mainly online, or the user asks to protect related local content instead of campaign saves.",
+      "researchOrder": [
+        {
+          "rank": 1,
+          "source": "PCGamingWiki",
+          "useFor": "Version-aware save, configuration, cloud-sync, and related game-data locations.",
+          "caution": "Community maintained. Treat paths as candidates and verify them on the user's machine."
+        },
+        {
+          "rank": 2,
+          "source": "Official game, publisher, or support documentation",
+          "useFor": "Authoritative editor, export, account, migration, and custom-content instructions.",
+          "caution": "Check that the article applies to the user's current edition and operating system."
+        },
+        {
+          "rank": 3,
+          "source": "Store/platform documentation and well-maintained community guides",
+          "useFor": "Steam Cloud behavior, workshop content, launcher-specific paths, and edition differences.",
+          "caution": "Distinguish official platform documentation from user-authored guides."
+        },
+        {
+          "rank": 4,
+          "source": "Forums and Reddit",
+          "useFor": "Leads for unusual versions, migrations, mods, and edge cases that primary sources do not cover.",
+          "caution": "Corroborate before acting. Never present one community comment as an authoritative path."
+        }
+      ],
+      "workflow": [
+        "Run gsbt status --ai, gsbt scan --full --ai, and gsbt list all --ai before assuming discovery failed.",
+        "Identify the exact game edition, store or launcher, Windows account, and whether Documents is redirected through OneDrive or another provider.",
+        "Research candidate locations in source order. Search by title plus edition and data type, without including the user's name or private local path.",
+        "Inspect candidate folders locally. A folder must exist and contain plausible durable user data before registration.",
+        "Separate saves from settings, caches, logs, downloaded assets, custom maps, mods, and editor source. Ask what the user actually wants protected.",
+        "Explain the proposed folder and evidence, then obtain approval before running gsbt add custom.",
+        "Run a targeted backup and verify it. Report the registered name, source folder, backup result, and any files that could not be copied."
+      ],
+      "safetyRules": [
+        "Never invent a path, create an empty guessed folder to satisfy GSBT, or claim a folder was found without checking the machine.",
+        "Do not back up an entire drive, Windows directory, Program Files tree, user profile, cloud-sync root, temp folder, cache, browser profile, or credential store by default.",
+        "Do not upload or expose local file contents, usernames, account IDs, or private paths while researching public documentation.",
+        "Do not assume that an online-focused game has no valuable local data merely because campaign saves are absent.",
+        "Prefer the narrowest folder that contains the durable data the user named, while retaining any files required to use that data."
+      ]
+    },
+    "knowledgePolicy": {
+      "summary": "The notebook is a maintained field manual with sourced examples, not an exhaustive frozen database of paths.",
+      "rules": [
+        "GSBT itself does not browse these sources. A capable agent may research them when the user asks and network tools are available.",
+        "Separate notebook facts from live machine observations and tell the user which is which.",
+        "Game-specific facts need source URLs, a verification date, edition scope, and a do-not-assume boundary.",
+        "Prefer a current runtime lookup over stale notebook detail when paths, launchers, or game versions may have changed.",
+        "If reliable sources disagree, present the candidates and inspect locally instead of choosing silently."
+      ]
+    },
+    "examples": {
+      "warcraft3CustomContent": {
+        "id": "example.warcraft3-custom-content",
+        "verifiedAt": "2026-07-17",
+        "scenario": "A Warcraft III player may have no campaign saves but may still value downloaded maps, authored maps, campaigns, or map-created persistent data.",
+        "verifiedFacts": [
+          "Blizzard's Warcraft III Editor guide says user-created maps should be saved under Documents\\Warcraft III\\Maps on Windows.",
+          "PCGamingWiki documents version-dependent save locations and lists Reforged campaign and CustomMapData locations separately from the maps folder."
+        ],
+        "agentGuidance": "Confirm Classic versus Reforged, resolve the user's real Documents location including OneDrive redirection, inspect the relevant Warcraft III subfolders, and offer separate descriptive custom entries only for folders the user wants protected.",
+        "doNotAssume": "No campaign save does not mean there are no maps or other valuable local files. Do not create a missing folder or back up all of Documents automatically.",
+        "sources": [
+          {
+            "title": "Warcraft III: Reforged - PCGamingWiki",
+            "url": "https://www.pcgamingwiki.com/wiki/Warcraft_III:_Reforged",
+            "type": "community-reference"
+          },
+          {
+            "title": "Warcraft III: Reign of Chaos - PCGamingWiki",
+            "url": "https://www.pcgamingwiki.com/wiki/Warcraft_III:_Reign_of_Chaos",
+            "type": "community-reference"
+          },
+          {
+            "title": "Revisiting the Warcraft III Editor - Blizzard News",
+            "url": "https://news.blizzard.com/en-us/article/23395649/revisiting-the-warcraft-iii-editor",
+            "type": "official"
+          }
+        ]
+      }
+    }
+  },
+  "futureTopics": [
+    {
+      "id": "screensaver-media-provenance",
+      "status": "not-yet-documented",
+      "scope": "Clip sources, soundtrack details, credits, and other sandbox screen saver trivia.",
+      "agentGuidance": "Until verified facts are added, do not invent a clip source or song title. State that the bundled notebook does not yet document it."
+    }
+  ]
+}

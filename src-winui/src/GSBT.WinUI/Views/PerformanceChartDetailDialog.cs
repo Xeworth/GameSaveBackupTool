@@ -586,15 +586,23 @@ internal static class PerformanceChartDetailDialog
         bool darkChrome)
     {
         var legendItems = new List<(string Label, Color Color, bool Dashed)>();
-        if (showGsbt)
+        if (HasSeries(chart.Series1))
         {
             legendItems.Add(("GSBT CPU", PerformanceChartPalettes.CpuGsbt, false));
+        }
+
+        if (HasSeries(chart.Series3))
+        {
             legendItems.Add(("GSBT RAM", PerformanceChartPalettes.MemGsbt, true));
         }
 
-        if (showCompress)
+        if (HasSeries(chart.Series2))
         {
             legendItems.Add(("Compression CPU", PerformanceChartPalettes.CpuCompression, false));
+        }
+
+        if (HasSeries(chart.Series4))
+        {
             legendItems.Add(("Compression RAM", PerformanceChartPalettes.MemCompression, true));
         }
 
@@ -845,24 +853,24 @@ internal static class PerformanceChartDetailDialog
         var legendItems = new List<(string Label, Color Color, bool Dashed)>();
         if (isMemory)
         {
-            if (showGsbt)
+            if (HasSeries(chart.Series1))
             {
                 legendItems.Add(("GSBT RAM", PerformanceChartPalettes.MemGsbt, false));
             }
 
-            if (showCompress)
+            if (HasSeries(chart.Series2))
             {
                 legendItems.Add(("Compression RAM", PerformanceChartPalettes.MemCompression, false));
             }
         }
         else
         {
-            if (showGsbt)
+            if (HasSeries(chart.Series1))
             {
                 legendItems.Add(("GSBT CPU", PerformanceChartPalettes.CpuGsbt, false));
             }
 
-            if (showCompress)
+            if (HasSeries(chart.Series2))
             {
                 legendItems.Add(("Compression CPU", PerformanceChartPalettes.CpuCompression, false));
             }
@@ -1192,6 +1200,8 @@ internal static class PerformanceChartDetailDialog
 
     private static string FormatMemStat(double memMiB, double systemMemMb) =>
         PerformanceChartRamFormatter.FormatRamMiB(memMiB, systemMemMb, includePercentOfRam: systemMemMb > 0.001);
+
+    private static bool HasSeries(double[]? series) => series is { Length: > 0 };
 
     private static void AddStatsHeader(Grid grid, ref int row, string text, bool darkChrome)
     {

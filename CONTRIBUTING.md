@@ -5,7 +5,7 @@ Thank you for your interest in **Game Save Backup Tool**. Contributions are welc
 ## Getting started
 
 1. Clone the repository
-2. For the **WinUI (Native)** edition: install [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) and Windows 10/11
+2. For the **WinUI (Native)** edition: install [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and Windows 10/11 x64
 3. Build and run:
 
    ```bat
@@ -19,9 +19,7 @@ Thank you for your interest in **Game Save Backup Tool**. Contributions are welc
    dotnet test src-winui\GSBT.sln -c Debug
    ```
 
-See [README.md](README.md) for monorepo layout. WinUI build, publish, and installer steps: [src-winui/README.md](src-winui/README.md).
-
-Agent / contributor UX conventions: [docs/winui/dev/CursorAgentGuide.md](docs/winui/dev/CursorAgentGuide.md).
+See [README.md](README.md) for repository layout. WinUI build, publish, and installer steps: [src-winui/README.md](src-winui/README.md).
 
 ## Pull requests
 
@@ -32,7 +30,7 @@ Agent / contributor UX conventions: [docs/winui/dev/CursorAgentGuide.md](docs/wi
 
 ## Pre-release work
 
-Engineering tasks are tracked in **[docs/winui/dev/RELEASE_CHECKLIST.md](docs/winui/dev/RELEASE_CHECKLIST.md)**.
+Engineering tasks are tracked in the **[v0.3 hardening roadmap](src-winui/docs/V0.3_HARDENING_ROADMAP.md)**.
 
 ## Sandbox / dev mode
 

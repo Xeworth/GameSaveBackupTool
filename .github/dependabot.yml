@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directories:
+      - /src-winui/src/GSBT.Core
+      - /src-winui/src/GSBT.Cli
+      - /src-winui/src/GSBT.WinUI
+      - /src-winui/tests/GSBT.Core.Tests
+      - /src-winui/tools/ScreenSaverAssetPacker
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5

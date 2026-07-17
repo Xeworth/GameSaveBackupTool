@@ -28,7 +28,9 @@ public sealed partial class MainViewModel
         _settings.Set("backup_size_estimate_enabled", payload.BackupSizeEstimateEnabled);
         _settings.Set("warn_backup_folder_name_collisions", payload.WarnBackupFolderNameCollisions);
 
-        var fmt = string.IsNullOrWhiteSpace(payload.DateFormat) ? "iso" : payload.DateFormat.Trim().ToLowerInvariant();
+        var fmt = string.IsNullOrWhiteSpace(payload.DateFormat)
+            ? GSBT.Core.Common.BackupDateFormatter.DefaultFormatKey
+            : payload.DateFormat.Trim().ToLowerInvariant();
         _settings.Set("date_format", fmt);
 
         var startupMode = string.IsNullOrWhiteSpace(payload.RunOnStartupMode) ? "disabled" : payload.RunOnStartupMode.Trim().ToLowerInvariant();
@@ -90,7 +92,7 @@ public sealed partial class MainViewModel
             _settings.Get("in_app_backup_warnings_enabled", true),
             _settings.Get("backup_size_estimate_enabled", true),
             _settings.Get("warn_backup_folder_name_collisions", true),
-            _settings.Get("date_format", "iso"),
+            _settings.Get("date_format", GSBT.Core.Common.BackupDateFormatter.DefaultFormatKey),
             _settings.Get("run_on_startup_mode", "disabled"),
             ThemeBridge.NormalizeUiThemeKey(_settings.Get("ui_theme", "dark")),
             Math.Clamp(_settings.Get("status_message_duration_seconds", 3), 1, 5),

@@ -15,7 +15,7 @@ public sealed partial class MainViewModel
         ScanProgress = 0;
         try
         {
-            var token = _operationCts.Token;
+            var token = _operationCts!.Token;
             var steps = Math.Max(1, durationSeconds * 2);
             for (var i = 0; i <= steps && !token.IsCancellationRequested; i++)
             {

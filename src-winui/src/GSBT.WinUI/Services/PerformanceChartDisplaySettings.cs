@@ -13,7 +13,7 @@ public static class PerformanceChartDisplaySettings
     /// <summary>Legacy single key; migrated read-only fallback.</summary>
     public const string ShowCheckpointsKey = "sandbox_perf_show_checkpoints";
 
-    public static bool ShowGsbt(SettingsStore store) => store.Get(ShowGsbtKey, true);
+    public static bool ShowGsbt(SettingsStore store) => false;
 
     public static bool ShowCompression(SettingsStore store) => store.Get(ShowCompressionKey, true);
 

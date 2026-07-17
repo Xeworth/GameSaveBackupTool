@@ -31,6 +31,8 @@ public sealed class ScanService
     public Task<string> RefreshManifestOnlineAsync(CancellationToken cancellationToken = default)
         => _manifestProvider.RefreshNowAsync(cancellationToken);
 
+    public ManifestProvenance GetManifestProvenance() => _manifestProvider.GetProvenance();
+
     public async Task<IReadOnlyList<GameRecord>> DetectGamesAsync(CancellationToken cancellationToken = default)
     {
         var raw = await _gameDetector.DetectAllGamesAsync(cancellationToken);
@@ -57,6 +59,8 @@ public sealed class ScanService
         {
             return;
         }
+
+        _saveCatalogManager.NormalizeDetectedDisplayNames();
 
         var deduped = games
             .GroupBy(RowId)

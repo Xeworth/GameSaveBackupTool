@@ -5,7 +5,8 @@ internal static class ScreenSaverSettings
     public const string EnabledKey = "compression_screen_saver_enabled";
     public const string WaitSecondsKey = "compression_screen_saver_wait_seconds";
 
-    public static bool IsEnabled(SettingsStore store) => store.Get(EnabledKey, true);
+    public static bool IsEnabled(SettingsStore store) =>
+        store.Get(EnabledKey, true) && ScreenSaverMediaCache.IsAvailable();
 
     public static int GetWaitSeconds(SettingsStore store) => NormalizeWaitSeconds(store.Get(WaitSecondsKey, 60));
 

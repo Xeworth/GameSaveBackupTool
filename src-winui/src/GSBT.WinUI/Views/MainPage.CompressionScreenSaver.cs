@@ -38,7 +38,7 @@ public partial class MainPage
             _screenSaverController.ExitRequested += ScreenSaverController_ExitRequested;
             CompressionScreenSaver.ExitRequested += CompressionScreenSaver_ExitRequested;
             CompressionScreenSaver.TrackEnded += CompressionScreenSaver_TrackEnded;
-            CompressionScreenSaver.Configure(_settingsStore.Get("date_format", "iso"));
+            CompressionScreenSaver.Configure(_settingsStore.Get("date_format", GSBT.Core.Common.BackupDateFormatter.DefaultFormatKey));
         }
 
         if (!_compressionTrackSubscribed)
@@ -114,7 +114,7 @@ public partial class MainPage
             var isMinimized = window is not null && WindowSizeHelper.IsWindowIconic(window);
             var asset = ResolveScreenSaverAsset();
 
-            CompressionScreenSaver.Configure(_settingsStore.Get("date_format", "iso"), asset.Id);
+            CompressionScreenSaver.Configure(_settingsStore.Get("date_format", GSBT.Core.Common.BackupDateFormatter.DefaultFormatKey), asset.Id);
             CompressionScreenSaver.AssetRotationEnabled = IsScreenSaverRotationEnabled();
             ConfigureScreenSaverFileTracker();
             ApplyCompressionFileTrackerToOverlay();

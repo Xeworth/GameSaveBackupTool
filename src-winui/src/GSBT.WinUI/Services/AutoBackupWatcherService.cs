@@ -28,10 +28,12 @@ public sealed class AutoBackupWatcherService : IDisposable
     private readonly Dictionary<string, RegistrySaveBackupService.RegistrySaveTarget> _registryTargets = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _registryFingerprints = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _lastBackupUtc = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, CancellationTokenSource> _debounceTokens = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly object _gate = new();
 
     private DispatcherQueueTimer? _pollTimer;
+    private bool _disposed;
 
     public AutoBackupWatcherService(
         SettingsStore settings,
@@ -200,7 +202,7 @@ public sealed class AutoBackupWatcherService : IDisposable
 
                 OnSaveActivity(
                     gameName,
-                    () =>
+                    token =>
                     {
                         _folderBackup.BackupToRetentionFolder(
                             gameName,
@@ -208,7 +210,7 @@ public sealed class AutoBackupWatcherService : IDisposable
                             dest,
                             retention,
                             subfolder,
-                            CancellationToken.None,
+                            token,
                             out string _,
                             out var err);
                         return err;
@@ -262,74 +264,121 @@ public sealed class AutoBackupWatcherService : IDisposable
         }
     }
 
-    private void OnSaveActivity(string gameName, Func<string?> runBackup)
+    private void OnSaveActivity(string gameName, Func<CancellationToken, string?> runBackup)
     {
-        var frequencyMinutes = Math.Max(1, _settings.Get("backup_frequency_minutes", 5));
-        var now = DateTime.UtcNow;
+        CancellationTokenSource debounce;
         lock (_gate)
         {
-            if (_lastBackupUtc.TryGetValue(gameName, out var last))
+            if (_disposed)
             {
-                if (now - last < TimeSpan.FromMinutes(frequencyMinutes))
+                return;
+            }
+
+            if (_debounceTokens.Remove(gameName, out var previous))
+            {
+                previous.Cancel();
+            }
+
+            debounce = new CancellationTokenSource();
+            _debounceTokens[gameName] = debounce;
+        }
+
+        _ = RunDebouncedFolderBackupAsync(gameName, runBackup, debounce);
+    }
+
+    private async Task RunDebouncedFolderBackupAsync(
+        string gameName,
+        Func<CancellationToken, string?> runBackup,
+        CancellationTokenSource debounce)
+    {
+        var beganBackup = false;
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2), debounce.Token).ConfigureAwait(false);
+            var frequencyMinutes = Math.Max(1, _settings.Get("backup_frequency_minutes", 5));
+            lock (_gate)
+            {
+                if (_disposed
+                    || _lastBackupUtc.TryGetValue(gameName, out var last)
+                    && DateTime.UtcNow - last < TimeSpan.FromMinutes(frequencyMinutes))
                 {
                     return;
                 }
             }
 
-        }
-
-        if (!_backupCoordinator.TryBegin(gameName))
-        {
-            return;
-        }
-
-        _notifyUser?.Invoke($"Backing up {gameName}…");
-
-        _ = Task.Run(() =>
-        {
-            try
+            beganBackup = _backupCoordinator.TryBegin(gameName);
+            if (!beganBackup)
             {
-                var err = runBackup();
-                _dispatcher.TryEnqueue(() =>
-                {
-                    try
-                    {
-                        if (!string.IsNullOrEmpty(err))
-                        {
-                            _sandboxLog?.Log("warn", $"Auto-backup failed ({gameName}): {err}");
-                            return;
-                        }
+                return;
+            }
 
-                        var iso = DateTime.UtcNow.ToString("O");
-                        _catalog.UpdateLastBackup(gameName, iso);
-                        _catalog.Flush();
-                        MarkBackupCooldown(gameName);
-                        _onBackupSucceeded?.Invoke(gameName);
-                        _sandboxLog?.Log("info", $"Auto-backup finished: {gameName}");
-                        _notifyUser?.Invoke($"Backed up {gameName}");
-                    }
-                    finally
-                    {
-                        _backupCoordinator.End(gameName);
-                    }
-                });
-            }
-            catch (Exception ex)
+            _notifyUser?.Invoke($"Backing up {gameName}...");
+            string? error = null;
+            for (var attempt = 1; attempt <= 3; attempt++)
             {
-                _dispatcher.TryEnqueue(() =>
+                debounce.Token.ThrowIfCancellationRequested();
+                error = runBackup(debounce.Token);
+                if (string.IsNullOrWhiteSpace(error) || !IsTransientBackupError(error) || attempt == 3)
                 {
-                    try
-                    {
-                        _sandboxLog?.Log("warn", $"Auto-backup failed ({gameName}): {ex.Message}");
-                    }
-                    finally
-                    {
-                        _backupCoordinator.End(gameName);
-                    }
-                });
+                    break;
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(250 * attempt), debounce.Token).ConfigureAwait(false);
             }
-        });
+
+            _dispatcher.TryEnqueue(() =>
+            {
+                if (!string.IsNullOrWhiteSpace(error))
+                {
+                    OperationHistoryStore.Record("auto-backup", "failed", error, gameName);
+                    _sandboxLog?.Log("warn", $"Auto-backup failed ({gameName}): {error}");
+                    return;
+                }
+
+                var iso = DateTime.UtcNow.ToString("O");
+                _catalog.UpdateLastBackup(gameName, iso);
+                OperationHistoryStore.Record("auto-backup", "succeeded", "Auto-backup completed.", gameName);
+                _catalog.Flush();
+                MarkBackupCooldown(gameName);
+                _onBackupSucceeded?.Invoke(gameName);
+                _sandboxLog?.Log("info", $"Auto-backup finished: {gameName}");
+                _notifyUser?.Invoke($"Backed up {gameName}");
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer event replaced this debounce, or monitoring stopped.
+        }
+        catch (Exception ex)
+        {
+            _dispatcher.TryEnqueue(() =>
+                _sandboxLog?.Log("warn", $"Auto-backup failed ({gameName}): {ex.Message}"));
+        }
+        finally
+        {
+            if (beganBackup)
+            {
+                _backupCoordinator.End(gameName);
+            }
+
+            lock (_gate)
+            {
+                if (_debounceTokens.TryGetValue(gameName, out var current)
+                    && ReferenceEquals(current, debounce))
+                {
+                    _debounceTokens.Remove(gameName);
+                }
+            }
+
+            debounce.Dispose();
+        }
     }
+
+    private static bool IsTransientBackupError(string error) =>
+        error.Contains("used by another process", StringComparison.OrdinalIgnoreCase)
+        || error.Contains("sharing violation", StringComparison.OrdinalIgnoreCase)
+        || error.Contains("being used", StringComparison.OrdinalIgnoreCase)
+        || error.Contains("temporarily unavailable", StringComparison.OrdinalIgnoreCase);
 
     private void MarkBackupCooldown(string gameName)
     {
@@ -366,10 +415,13 @@ public sealed class AutoBackupWatcherService : IDisposable
             if (!RegistrySaveBackupService.TryComputeSnapshotFingerprint(
                     target.Hive,
                     target.Subkey,
-                    out var fingerprint))
+                    out var fingerprint,
+                    out var fingerprintError))
             {
                 _registryFingerprints.Remove(gameName);
-                _sandboxLog?.Log("warn", $"Registry key missing for \"{gameName}\" — will retry on next poll.");
+                _sandboxLog?.Log(
+                    "warn",
+                    $"Registry save unavailable for \"{gameName}\": {fingerprintError ?? "unknown read error"} Will retry on next poll.");
                 continue;
             }
 
@@ -401,61 +453,65 @@ public sealed class AutoBackupWatcherService : IDisposable
             var subkey = target.Subkey;
             var capturedFingerprint = fingerprint;
 
-            _ = Task.Run(() =>
+            _ = RunRegistryBackupAsync(
+                gameName,
+                hive,
+                subkey,
+                dest,
+                retention,
+                subfolder,
+                capturedFingerprint);
+        }
+    }
+
+    private async Task RunRegistryBackupAsync(
+        string gameName,
+        string hive,
+        string subkey,
+        string destination,
+        int retention,
+        bool subfolder,
+        string capturedFingerprint)
+    {
+        try
+        {
+            var result = await Task.Run(() => _registryBackup.BackupToRetentionFileWithResult(
+                gameName,
+                hive,
+                subkey,
+                destination,
+                retention,
+                subfolder,
+                CancellationToken.None)).ConfigureAwait(false);
+
+            _dispatcher.TryEnqueue(() =>
             {
-                try
+                if (!result.Success)
                 {
-                    _registryBackup.BackupToRetentionFile(
-                        gameName,
-                        hive,
-                        subkey,
-                        dest,
-                        retention,
-                        subfolder,
-                        CancellationToken.None,
-                        out _,
-                        out var err);
-
-                    _dispatcher.TryEnqueue(() =>
-                    {
-                        try
-                        {
-                            if (!string.IsNullOrEmpty(err))
-                            {
-                                _sandboxLog?.Log("warn", $"Registry auto-backup failed ({gameName}): {err}");
-                                return;
-                            }
-
-                            _registryFingerprints[gameName] = capturedFingerprint;
-                            var iso = DateTime.UtcNow.ToString("O");
-                            _catalog.UpdateLastBackup(gameName, iso);
-                            _catalog.Flush();
-                            MarkBackupCooldown(gameName);
-                            _onBackupSucceeded?.Invoke(gameName);
-                            _sandboxLog?.Log("info", $"Registry auto-backup finished: {gameName}");
-                            _notifyUser?.Invoke($"Backed up {gameName}");
-                        }
-                        finally
-                        {
-                            _backupCoordinator.End(gameName);
-                        }
-                    });
+                    OperationHistoryStore.Record("auto-backup", "failed", result.Error ?? "Registry backup failed.", gameName);
+                    _sandboxLog?.Log("warn", $"Registry auto-backup failed ({gameName}): {result.Error}");
+                    return;
                 }
-                catch (Exception ex)
-                {
-                    _dispatcher.TryEnqueue(() =>
-                    {
-                        try
-                        {
-                            _sandboxLog?.Log("warn", $"Registry auto-backup failed ({gameName}): {ex.Message}");
-                        }
-                        finally
-                        {
-                            _backupCoordinator.End(gameName);
-                        }
-                    });
-                }
+
+                _registryFingerprints[gameName] = capturedFingerprint;
+                var iso = DateTime.UtcNow.ToString("O");
+                _catalog.UpdateLastBackup(gameName, iso);
+                _catalog.Flush();
+                MarkBackupCooldown(gameName);
+                OperationHistoryStore.Record("auto-backup", "succeeded", "Registry auto-backup completed.", gameName);
+                _onBackupSucceeded?.Invoke(gameName);
+                _sandboxLog?.Log("info", $"Registry auto-backup finished: {gameName}");
+                _notifyUser?.Invoke($"Backed up {gameName}");
             });
+        }
+        catch (Exception ex)
+        {
+            _dispatcher.TryEnqueue(() =>
+                _sandboxLog?.Log("warn", $"Registry auto-backup failed ({gameName}): {ex.Message}"));
+        }
+        finally
+        {
+            _backupCoordinator.End(gameName);
         }
     }
 
@@ -560,6 +616,13 @@ public sealed class AutoBackupWatcherService : IDisposable
 
     private void StopMonitoringUnsafe()
     {
+        foreach (var debounce in _debounceTokens.Values)
+        {
+            debounce.Cancel();
+            debounce.Dispose();
+        }
+
+        _debounceTokens.Clear();
         foreach (var w in _watchers.Values)
         {
             w.EnableRaisingEvents = false;
@@ -601,6 +664,7 @@ public sealed class AutoBackupWatcherService : IDisposable
     {
         lock (_gate)
         {
+            _disposed = true;
             if (_pollTimer is not null)
             {
                 _pollTimer.Stop();

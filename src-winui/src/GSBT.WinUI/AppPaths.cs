@@ -11,7 +11,7 @@ internal static class AppPaths
 
     public static string WinUiCrashLogPath => Path.Combine(LogsDirectory, "winui_last_error.txt");
 
-    /// <summary>Sandbox monitor → Benchmark tab: persisted compression run records (JSON).</summary>
+    /// <summary>Sandbox monitor → Benchmark results tab: persisted compression run records (JSON).</summary>
     public static string SandboxCompressionBenchmarksPath =>
         Path.Combine(WinUiUserDataRoot, "sandbox_compression_benchmarks.json");
 

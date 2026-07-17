@@ -647,7 +647,7 @@
                 <TextBlock
                     MaxWidth="340"
                     TextWrapping="WrapWholeWords"
-                    Text="Use Scan for games to detect installs from the manifest, or Add custom game when you already know your save folder." />
+                    Text="Use Scan to detect installs from the manifest, or Add custom game when you already know your save folder." />
             </TeachingTip.Content>
         </TeachingTip>
 

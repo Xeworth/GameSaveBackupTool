@@ -316,12 +316,30 @@ public sealed partial class SandboxBatchBenchmarkView : UserControl
         };
         AutomationProperties.SetName(host.StepProgress, "Test progress");
 
+        host.ModeCombo = new ComboBox
+        {
+            Header = "Compression type",
+            MinWidth = 180,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+        host.ModeCombo.Items.Add(new ComboBoxItem { Content = "Chunky", Tag = "solid" });
+        host.ModeCombo.Items.Add(new ComboBoxItem { Content = "Smooth", Tag = "smooth" });
+        host.ModeCombo.SelectedIndex = 0;
+        ToolTipService.SetToolTip(
+            host.ModeCombo,
+            "Chunky uses solid archives for smaller output. Smooth uses per-file packing for steadier progress and quicker cancel.");
+
+        var headerLeft = new StackPanel { Spacing = 2 };
+        headerLeft.Children.Add(titleRow);
+        headerLeft.Children.Add(host.ModeCombo);
+
         var header = new Grid { VerticalAlignment = VerticalAlignment.Center };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(titleRow, 0);
+        Grid.SetColumn(headerLeft, 0);
         Grid.SetColumn(host.RemoveButton, 1);
-        header.Children.Add(titleRow);
+        header.Children.Add(headerLeft);
         header.Children.Add(host.RemoveButton);
 
         var mxIndexMax = SevenZipCompressionLevelMapper.SliderIndexCount - 1;
@@ -333,8 +351,9 @@ public sealed partial class SandboxBatchBenchmarkView : UserControl
             TickFrequency = 1,
             TickPlacement = Microsoft.UI.Xaml.Controls.Primitives.TickPlacement.Outside,
             Value = SevenZipCompressionLevelMapper.SliderIndexFromMx(5),
-            Header = "Compression level (0, 1, 3, 5, 7, 9)",
+            Header = "Compression level",
         };
+        CompressionLevelSliderUi.WireMxLevelFlyout(host.LevelSlider);
 
         var threadMax = CompressionOptionsResolver.LogicalProcessorCount;
         host.ThreadSlider = new Slider
@@ -345,7 +364,7 @@ public sealed partial class SandboxBatchBenchmarkView : UserControl
             TickFrequency = 1,
             TickPlacement = Microsoft.UI.Xaml.Controls.Primitives.TickPlacement.Outside,
             Value = 0,
-            Header = $"CPU threads (Auto … {threadMax})",
+            Header = "CPU threads",
         };
         host.ThreadLabel = new TextBlock
         {
@@ -475,8 +494,9 @@ public sealed partial class SandboxBatchBenchmarkView : UserControl
             var threads = CompressionOptionsResolver.NormalizeThreadCount(
                 (int)Math.Round(h.ThreadSlider.Value),
                 CompressionOptionsResolver.LogicalProcessorCount);
+            var solidArchive = IsSolidArchive(h);
             var name = string.IsNullOrEmpty(h.CustomName) ? null : h.CustomName;
-            specs.Add(new BatchTestBeginSpec(mx, threads, name));
+            specs.Add(new BatchTestBeginSpec(mx, threads, solidArchive, name));
         }
 
         _batchCts = new CancellationTokenSource();
@@ -503,16 +523,19 @@ public sealed partial class SandboxBatchBenchmarkView : UserControl
                 var step = specs[i];
                 var mx = step.Mx;
                 var threads = step.Threads;
+                var solidArchive = step.SolidArchive;
                 var rowHost = _batchRows[i];
                 _batchPerfHub.SetStepRunning(i);
                 var checkpointLabel = BatchTestDisplayName.TruncateForCheckpoint(
                     BatchTestDisplayName.Resolve(rowHost.CustomName, i));
-                var paramLine = BatchTestParameterFormatter.BuildCompact(mx, threads);
+                var paramLine = BatchTestParameterFormatter.BuildCompact(mx, threads, solidArchive);
+                var perfStartSerial = _resourceMonitor.TotalSampleSerial + 1;
                 _resourceMonitor.NotifyBatchStepStarting(i, checkpointLabel, paramLine);
                 StatusText.Text = $"Batch step {i + 1} of {specs.Count}…";
                 var mmtLog = threads <= 0 ? "Auto" : threads.ToString();
-                _log.Log("benchmark", $"Batch {i + 1}/{specs.Count}: -mx={mx} -mmt={mmtLog} (native .7z)");
-                var opts = CompressionOptionsResolver.FromExplicit(mx, threads);
+                var solidLog = solidArchive ? "on" : "off";
+                _log.Log("benchmark", $"Batch {i + 1}/{specs.Count}: -mx={mx} -mmt={mmtLog} -ms={solidLog} (native .7z)");
+                var opts = CompressionOptionsResolver.FromExplicit(mx, threads, solidArchive);
                 var progress = new Progress<int>(pct =>
                 {
                     var p = Math.Clamp(pct, 0, 100);
@@ -563,8 +586,9 @@ public sealed partial class SandboxBatchBenchmarkView : UserControl
                 }
 
                 var serial = _resourceMonitor.NotifyBatchStepEnded(i);
+                var perfSummary = _resourceMonitor.TryComputeSummary(perfStartSerial, serial);
 
-                var entry = SandboxBenchmarkFormat.FromResult(backup, result);
+                var entry = SandboxBenchmarkFormat.FromResult(backup, result, perfSummary);
                 _batchPerfHub.SetStepCompleted(i, serial, entry);
 
                 _ = dq.TryEnqueue(() => rowHost.StepProgress.Value = 100);
@@ -605,6 +629,16 @@ public sealed partial class SandboxBatchBenchmarkView : UserControl
         StatusText.Text = "Cancelling…";
     }
 
+    private static bool IsSolidArchive(BatchRowHost host)
+    {
+        if (host.ModeCombo.SelectedItem is ComboBoxItem { Tag: string tag })
+        {
+            return string.Equals(tag, "solid", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return true;
+    }
+
     private sealed class BatchRowHost
     {
         public TextBlock Label { get; set; } = null!;
@@ -612,6 +646,7 @@ public sealed partial class SandboxBatchBenchmarkView : UserControl
         public string? CustomName { get; set; }
         public Button RemoveButton { get; set; } = null!;
         public Slider LevelSlider { get; set; } = null!;
+        public ComboBox ModeCombo { get; set; } = null!;
         public Slider ThreadSlider { get; set; } = null!;
         public TextBlock ThreadLabel { get; set; } = null!;
         public ProgressBar StepProgress { get; set; } = null!;

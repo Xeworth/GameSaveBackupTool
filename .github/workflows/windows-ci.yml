@@ -1,0 +1,97 @@
+name: Windows CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: windows-2025
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            src-winui/**/packages.lock.json
+
+      - name: Restore canonical solution
+        run: dotnet restore src-winui/GSBT.sln --locked-mode
+
+      - name: Build canonical solution
+        run: dotnet build src-winui/GSBT.sln -c Debug --no-restore
+
+      - name: Test canonical solution
+        run: dotnet test src-winui/GSBT.sln -c Debug --no-build --logger "trx;LogFileName=canonical.trx"
+
+      - name: Audit dependencies
+        run: dotnet list src-winui/GSBT.sln package --vulnerable --include-transitive
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: '**/TestResults/*.trx'
+          if-no-files-found: ignore
+
+  release-smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') }}
+    needs: build-test
+    runs-on: windows-2025
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: src-winui/**/packages.lock.json
+
+      - name: Publish and validate full release
+        shell: cmd
+        run: src-winui\scripts\publish_release.bat
+
+      - name: Smoke CLI from self-contained publish
+        shell: pwsh
+        run: |
+          $publish = 'src-winui/src/GSBT.WinUI/bin/Release/net10.0-windows10.0.19041.0/win-x64/publish'
+          & "$publish/gsbt.exe" status --ai | ConvertFrom-Json | Out-Null
+          & "$publish/gsbt.exe" help --ai | ConvertFrom-Json | Out-Null
+
+      - name: Build portable package
+        shell: cmd
+        run: src-winui\scripts\package_portable.bat
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: cmd
+        run: src-winui\installer\build_installer.bat
+
+      - name: Upload validated packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: gsbt-windows-packages
+          path: |
+            src-winui/installer/output/GSBT_Setup_*.exe
+            src-winui/installer/output/GSBT_Portable_*.zip
+          if-no-files-found: error

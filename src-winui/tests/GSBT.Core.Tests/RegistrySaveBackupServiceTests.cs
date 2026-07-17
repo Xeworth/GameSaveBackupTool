@@ -76,6 +76,9 @@ public sealed class RegistrySaveBackupServiceTests
             Assert.Equal(Path.Combine(root, game), Path.GetDirectoryName(runDir));
 
             Assert.True(BackupRunManifestStore.TryReadCheckpointCapturedAtUtc(runDir, out _));
+            Assert.True(BackupRunManifestStore.TryReadManifest(runDir, out var manifest));
+            Assert.True(manifest.IsRegistry);
+            Assert.Equal($"HKEY_CURRENT_USER\\{TestSubkey}", manifest.SourceSaveDirectory);
             Assert.False(BackupRunManifestStore.HasManifestDrift(runDir));
             BackupRunManifestStore.DeleteManifestForBackupRun(runDir);
         }
@@ -109,5 +112,38 @@ public sealed class RegistrySaveBackupServiceTests
         Assert.True(RegistrySaveBackupService.TryGetTargetFromCatalogRow(row, out var target));
         Assert.Equal("HKEY_CURRENT_USER", target.Hive);
         Assert.Equal(TestSubkey, target.Subkey);
+    }
+
+    [Fact]
+    public void Canceled_registry_backup_promotes_nothing()
+    {
+        using var key = Registry.CurrentUser.CreateSubKey(TestSubkey, writable: true);
+        Assert.NotNull(key);
+        key.SetValue("GSBT_TestValue", "cancel", RegistryValueKind.String);
+        var root = Path.Combine(Path.GetTempPath(), "gsbt_reg_cancel_" + Guid.NewGuid().ToString("N"));
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        try
+        {
+            Assert.Throws<OperationCanceledException>(() =>
+                new RegistrySaveBackupService().BackupToRetentionFileWithResult(
+                    "Canceled Registry Game",
+                    "HKEY_CURRENT_USER",
+                    TestSubkey,
+                    root,
+                    3,
+                    true,
+                    cts.Token));
+            Assert.False(Directory.Exists(Path.Combine(root, "Canceled Registry Game"))
+                && Directory.EnumerateFileSystemEntries(Path.Combine(root, "Canceled Registry Game")).Any());
+        }
+        finally
+        {
+            Registry.CurrentUser.DeleteSubKeyTree(TestSubkey, throwOnMissingSubKey: false);
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
     }
 }

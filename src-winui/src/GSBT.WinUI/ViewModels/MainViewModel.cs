@@ -52,7 +52,7 @@ public sealed partial class MainViewModel : ObservableObject
     private DispatcherQueueTimer? _simulationBackupIntegrityPollTimer;
     private readonly Stack<List<GameRowViewModel>> _undoDelete = new();
 
-    /// <summary>After ÔÇ£replay teaching tips on next launchÔÇØ, allow one bulk-backup tip when the grid already has rows (normal flow is empty ÔåÆ scan tip first).</summary>
+    /// <summary>After "replay teaching tips on next launch", allow one bulk-backup tip when the grid already has rows (normal flow is empty -> scan tip first).</summary>
     private bool _pendingReplayCheckpointBulkBackup;
 
 
@@ -78,25 +78,25 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<GameRowViewModel> DisplayedGames { get; } = [];
 
     [ObservableProperty]
-    private string _statusText = "Ready. Click 'Scan for games'.";
+    public partial string StatusText { get; set; } = "Ready. Click 'Scan'.";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsProgressStripVisible))]
-    private bool _isScanning;
+    public partial bool IsScanning { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsProgressStripVisible))]
-    private bool _isBusy;
+    public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsProgressStripVisible))]
-    private double _scanProgress;
+    public partial double ScanProgress { get; set; }
 
     [ObservableProperty]
-    private GameCatalogFilterMode _filterMode = GameCatalogFilterMode.FoundOnly;
+    public partial GameCatalogFilterMode FilterMode { get; set; } = GameCatalogFilterMode.FoundOnly;
 
     [ObservableProperty]
-    private string _filterButtonText = "Filter: Found";
+    public partial string FilterButtonText { get; set; } = "Filter: Found";
 
     /// <summary>Thin progress track under the grid (hidden when idle).</summary>
     public bool IsProgressStripVisible => IsScanning || IsBusy || ScanProgress > 0.5;
@@ -108,13 +108,13 @@ public sealed partial class MainViewModel : ObservableObject
     private FooterCancelSlot _footerCancelSlot;
     private bool _operationCancelRequested;
 
-    /// <summary>Footer Backup / Compress ÔÇö disabled while backup/compress holds <see cref="IsBusy"/> (except Cancel morph).</summary>
+    /// <summary>Footer Backup / Compress: disabled while backup/compress holds <see cref="IsBusy"/> (except Cancel morph).</summary>
     public bool CanBackupOrCompressFooter => CanUseBackupAndCompress && !IsBusy;
 
-    /// <summary>True while a manual backup is running ÔÇö Backup footer shows Cancel.</summary>
+    /// <summary>True while a manual backup is running: Backup footer shows Cancel.</summary>
     public bool FooterBackupShowsCancel => IsBusy && _footerCancelSlot == FooterCancelSlot.Backup;
 
-    /// <summary>True while compress is running ÔÇö Compress footer shows Cancel.</summary>
+    /// <summary>True while compress is running: Compress footer shows Cancel.</summary>
     public bool FooterCompressShowsCancel => IsBusy && _footerCancelSlot == FooterCancelSlot.Compress;
 
     /// <summary>Backup slot interactive (run backup or cancel an in-flight backup).</summary>
@@ -123,7 +123,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Compress slot interactive (run compress or cancel an in-flight compress).</summary>
     public bool CompressFooterEnabled => FooterCompressShowsCancel || (CanUseBackupAndCompress && !IsBusy);
 
-    /// <summary>Scan, settings, tools, etc. ÔÇö disabled during backup/compress.</summary>
+    /// <summary>Scan, settings, tools, etc. are disabled during backup/compress.</summary>
     public bool CanUseFooterCommands => !IsBusy;
 
     /// <summary>User pressed Cancel; work is stopping (footer shows greyed Canceling).</summary>
@@ -202,10 +202,10 @@ public sealed partial class MainViewModel : ObservableObject
     private AutoBackupTipPayload? _pendingAutoBackupTip;
 
     [ObservableProperty]
-    private bool _backupIntegrityStripVisible;
+    public partial bool BackupIntegrityStripVisible { get; set; }
 
     [ObservableProperty]
-    private string _backupIntegrityStripMessage = string.Empty;
+    public partial string BackupIntegrityStripMessage { get; set; } = string.Empty;
 
     private void TryNotifyAutoBackupToast(string message) =>
         TryNotifyAutoBackupToast(message, AutoBackupToastChrome.None, null, BackupToastSeverity.Neutral);
@@ -464,7 +464,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     public bool ShouldShowCompressTeachingTip() => !IsTeachingTipMarkedShown("compress_teaching_tip_shown");
 
-    /// <summary>Shown once after the footer ÔÇ£Compress your backupsÔÇØ teaching tip is dismissed.</summary>
+    /// <summary>Shown once after the footer "Compress your backups" teaching tip is dismissed.</summary>
     public bool ShouldShowSettingsAfterCompressTeachingTip() =>
         !_settings.Get("settings_after_compress_pointer_tip_shown", false);
 

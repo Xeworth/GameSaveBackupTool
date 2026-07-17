@@ -52,10 +52,10 @@ public sealed partial class MainViewModel
         BeginCancellableOperation(FooterCancelSlot.Backup);
         try
         {
-            var token = _operationCts.Token;
+            var token = _operationCts!.Token;
             try
             {
-                // Copying save trees is synchronous I/O ÔÇö must not run on the UI thread or WinUI freezes.
+                // Copying save trees is synchronous I/O; keep it off the UI thread.
                 await Task.Run(
                     () =>
                     {
@@ -138,6 +138,12 @@ public sealed partial class MainViewModel
                                 _sandboxLog.Log("warn", $"Backup failed ({rowCopy.GameName}): {err}");
                             }
 
+                            OperationHistoryStore.Record(
+                                "backup",
+                                string.IsNullOrWhiteSpace(err) ? "succeeded" : "failed",
+                                string.IsNullOrWhiteSpace(err) ? "Backup completed." : err,
+                                rowCopy.GameName);
+
                             var p = progressAfterWork;
                             EnqueueUi(() => { ScanProgress = p; });
                         }
@@ -199,7 +205,7 @@ public sealed partial class MainViewModel
         }
     }
 
-    /// <summary>When disk work finishes in a flash, run a visible sweep so the footer bar reads as ÔÇ£done.ÔÇØ</summary>
+    /// <summary>When disk work finishes in a flash, run a visible sweep so the footer bar reads as "done."</summary>
     private async Task PresentBackupProgressFinishAsync(long workElapsedMs, double progressAfterWork, int gameCount)
     {
         if (gameCount <= 0)
@@ -251,7 +257,7 @@ public sealed partial class MainViewModel
             (k, d) => _settings.Get(k, d) ?? string.Empty,
             (k, d) => _settings.Get(k, d));
 
-    /// <summary>Effective backup root for compress-on-exit and benchmarks (respects sandbox ÔÇ£no pathÔÇØ).</summary>
+    /// <summary>Effective backup root for compress-on-exit and benchmarks (respects sandbox "no path").</summary>
     public string? GetEffectiveBackupRootForCompressPrompt()
     {
         if (_overrides.SimulateNoBackupDestination)
@@ -324,7 +330,7 @@ public sealed partial class MainViewModel
                     _dispatcher);
                 progressSim.Start();
                 var progress = new Progress<int>(pct => progressSim.SetTarget(pct));
-                _sandboxLog.Log("compress", $"Start {opts.SummaryLabel} ÔåÆ {archiveName}");
+                _sandboxLog.Log("compress", $"Start {opts.SummaryLabel} -> {archiveName}");
                 _compressionActivity.Clear();
                 Action<CompressionGameTrackUpdate>? reportGameTrack = opts.SolidArchive
                     ? null
@@ -451,7 +457,7 @@ public sealed partial class MainViewModel
     public bool IsLargeSavePathTrusted(string gameName) =>
         GetTrustedLargeSavePaths().Contains(gameName);
 
-    /// <summary>Marks a save path as trusted so future estimates/backups donÔÇÖt warn for size on this title.</summary>
+    /// <summary>Marks a save path as trusted so future estimates/backups do not warn for size on this title.</summary>
     public void TrustLargeSavePath(string gameName)
     {
         var name = (gameName ?? string.Empty).Trim();

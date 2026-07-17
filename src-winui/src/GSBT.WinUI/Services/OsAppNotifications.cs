@@ -83,7 +83,7 @@ public static class OsAppNotifications
         }
         catch
         {
-            // Ignore failures — optional UX.
+            // Ignore failures: optional UX.
         }
     }
 
@@ -138,15 +138,15 @@ public static class OsAppNotifications
         iconFileName = AppBrandingIcons.MainIconFileName;
         iconSourcePath = string.Empty;
 
-        var sandboxSession = App.LaunchSandboxMonitor && !App.IsSandboxSimulationChild;
+        var sandboxSession = AppIdentity.IsSandboxSession(App.LaunchSandboxMonitor, App.IsSandboxSimulationChild);
         iconFileName = AppBrandingIcons.IconFileNameForSession(sandboxSession);
-        displayName = sandboxSession ? "GSBT Sandbox" : AppAboutInfo.AppName;
+        displayName = sandboxSession ? AppIdentity.SandboxDisplayName : AppAboutInfo.AppName;
         return AppBrandingIcons.TryResolveIconPath(iconFileName, out iconSourcePath);
     }
 
     /// <summary>
     /// WinApp SDK reads the registered icon from a stable local path. Copy beside AppData so updates
-    /// apply even when gsbt.exe and gsbt-sandbox.exe share the same hard-linked binary identity.
+    /// apply even when a session switches between main and sandbox branding.
     /// </summary>
     private static string CopyIconForNotificationRegistration(string sourcePath, string iconFileName)
     {
@@ -169,7 +169,7 @@ public static class OsAppNotifications
             return true;
         }
 
-        if (string.Equals(title, "GSBT Sandbox", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(title, AppIdentity.SandboxDisplayName, StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }

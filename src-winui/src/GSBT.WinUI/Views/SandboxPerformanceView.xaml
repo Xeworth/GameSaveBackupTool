@@ -14,7 +14,7 @@
                 FontSize="11"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                 TextWrapping="WrapWholeWords"
-                Text="Live CPU and RAM while compression runs (built-in ZIP uses in-process CPU on the gold line; 7-Zip uses a separate process). Pink markers show when each named batch test finished. Expand icons open a large chart window with scroll and hover." />
+                Text="Live CPU and RAM while bundled 7-Zip compression runs. Pink markers show when each named batch test finished. Expand icons open a large chart window with scroll and hover." />
             <TextBlock
                 x:Name="SamplingStatusText"
                 FontSize="11"

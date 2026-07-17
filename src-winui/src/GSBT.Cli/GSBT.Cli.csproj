@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(GsbtTargetFramework)</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>GSBT.Cli</RootNamespace>
+    <AssemblyName>gsbt</AssemblyName>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <GsbtManifestSource Condition="Exists('..\GSBT.WinUI\data\ludusavi-save-manifest.json')">..\GSBT.WinUI\data\ludusavi-save-manifest.json</GsbtManifestSource>
+    <GsbtManifestSource Condition="'$(GsbtManifestSource)' == ''">..\..\data\ludusavi-save-manifest.json</GsbtManifestSource>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Spectre.Console" Version="0.57.2" />
+    <PackageReference Include="System.CommandLine" Version="2.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GSBT.Core\GSBT.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="AgentKnowledge\gsbt-agent-notebook.json"
+                      LogicalName="GSBT.Cli.AgentNotebook.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\native\win-x64\7z.dll">
+      <Link>7z.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="$(GsbtManifestSource)">
+      <Link>data\ludusavi-save-manifest.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

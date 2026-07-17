@@ -64,21 +64,27 @@ public static class UserDataDir
     /// <summary><c>%LocalAppData%/Game Save Backup Tool/gsbt</c> — short-path root for ephemeral WinUI data.</summary>
     public static string GetLocalShortDataDir()
     {
+        var localBase = Environment.GetEnvironmentVariable("GSBT_LOCAL_DATA_ROOT");
+        if (string.IsNullOrWhiteSpace(localBase))
+        {
+            localBase = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        }
+
         var target = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            localBase,
             AppFolderName,
             ShortSubdirName);
         Directory.CreateDirectory(target);
         MigrateLegacyDirectory(
             Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                localBase,
                 LegacyAppFolderName),
             Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                localBase,
                 AppFolderName));
         MigrateLegacyDirectory(
             Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                localBase,
                 LegacyAppFolderName,
                 "SandboxSimulation"),
             Path.Combine(target, "sandbox"));
@@ -162,6 +168,12 @@ public static class UserDataDir
 
     private static string PlatformUserDataBase()
     {
+        var overrideRoot = Environment.GetEnvironmentVariable("GSBT_USER_DATA_ROOT");
+        if (!string.IsNullOrWhiteSpace(overrideRoot))
+        {
+            return Path.GetFullPath(overrideRoot);
+        }
+
         if (OperatingSystem.IsWindows())
         {
             return Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);

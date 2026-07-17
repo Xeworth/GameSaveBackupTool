@@ -1,4 +1,5 @@
 using System.Text.Json;
+using GSBT.Core.Catalog;
 using GSBT.Core.Common;
 
 namespace GSBT.Core.Services;
@@ -7,8 +8,11 @@ public sealed class SaveCatalogManager
 {
     private readonly object _lock = new();
     private bool _dirty;
+    private DateTime _loadedWriteUtc;
+    private long _loadedLength;
 
     public string CatalogPath { get; }
+    public string CatalogMetadataPath => CatalogPath + ".meta.json";
     public string? LegacyCatalogPath { get; }
     public Dictionary<string, Dictionary<string, object?>> Catalog { get; private set; }
 
@@ -36,6 +40,7 @@ public sealed class SaveCatalogManager
         }
 
         Catalog = LoadCatalog();
+        CaptureFileStampUnsafe();
     }
 
     /// <summary>When true, <see cref="LoadCatalog"/> did not read disk (fresh session until first persist).</summary>
@@ -47,9 +52,180 @@ public sealed class SaveCatalogManager
     {
         lock (_lock)
         {
+            using var processLock = AcquireCatalogLock();
+            ReloadPrimaryUnsafe();
             Catalog[gameName] = payload;
             _dirty = true;
+            PersistUnsafe();
         }
+    }
+
+    /// <summary>Normalize detected catalog keys to human-facing names and merge old raw trademark variants.</summary>
+    public int NormalizeDetectedDisplayNames()
+    {
+        lock (_lock)
+        {
+            using var processLock = AcquireCatalogLock();
+            ReloadPrimaryUnsafe();
+            if (Catalog.Count == 0)
+            {
+                return 0;
+            }
+
+            var normalized = new Dictionary<string, Dictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
+            var changed = 0;
+            foreach (var (key, row) in Catalog)
+            {
+                if (CatalogUserAdded.IsUserAddedEntry(row))
+                {
+                    AddPreservingUserRows(normalized, key, row);
+                    continue;
+                }
+
+                var clean = GameDisplayName.CleanDisplayName(key);
+                var targetKey = string.IsNullOrWhiteSpace(clean) ? key : clean;
+                if (!string.Equals(key, targetKey, StringComparison.Ordinal))
+                {
+                    changed++;
+                }
+
+                if (normalized.TryGetValue(targetKey, out var existing)
+                    && CatalogUserAdded.IsUserAddedEntry(existing))
+                {
+                    AddPreservingUserRows(normalized, key, row);
+                    continue;
+                }
+
+                if (normalized.TryGetValue(targetKey, out existing))
+                {
+                    normalized[targetKey] = MergeCatalogRows(existing, row);
+                    changed++;
+                }
+                else
+                {
+                    normalized[targetKey] = row;
+                }
+            }
+
+            if (changed == 0)
+            {
+                return 0;
+            }
+
+            Catalog = normalized;
+            _dirty = true;
+            PersistUnsafe();
+            return changed;
+        }
+    }
+
+    private static void AddPreservingUserRows(
+        Dictionary<string, Dictionary<string, object?>> normalized,
+        string key,
+        Dictionary<string, object?> row)
+    {
+        if (!normalized.ContainsKey(key))
+        {
+            normalized[key] = row;
+            return;
+        }
+
+        var suffix = 2;
+        string candidate;
+        do
+        {
+            candidate = $"{key} ({suffix++})";
+        }
+        while (normalized.ContainsKey(candidate));
+
+        normalized[candidate] = row;
+    }
+
+    private static Dictionary<string, object?> MergeCatalogRows(
+        Dictionary<string, object?> existing,
+        Dictionary<string, object?> incoming)
+    {
+        var useIncoming = PreferRow(incoming, existing);
+        var merged = useIncoming
+            ? new Dictionary<string, object?>(incoming)
+            : new Dictionary<string, object?>(existing);
+        var fallback = useIncoming ? existing : incoming;
+
+        foreach (var (key, value) in fallback)
+        {
+            if (!merged.TryGetValue(key, out var current) || IsEmptyValue(current))
+            {
+                merged[key] = value;
+            }
+        }
+
+        var latestBackup = LatestLastBackup(
+            CatalogUserAdded.CoerceString(existing.GetValueOrDefault("last_backup")),
+            CatalogUserAdded.CoerceString(incoming.GetValueOrDefault("last_backup")));
+        if (!string.IsNullOrWhiteSpace(latestBackup))
+        {
+            merged["last_backup"] = latestBackup;
+        }
+
+        return merged;
+    }
+
+    private static bool PreferRow(Dictionary<string, object?> candidate, Dictionary<string, object?> current)
+    {
+        var candidateHasSave = RowHasSaveLocation(candidate);
+        var currentHasSave = RowHasSaveLocation(current);
+        if (candidateHasSave != currentHasSave)
+        {
+            return candidateHasSave;
+        }
+
+        var candidateBackup = CatalogUserAdded.CoerceString(candidate.GetValueOrDefault("last_backup"));
+        var currentBackup = CatalogUserAdded.CoerceString(current.GetValueOrDefault("last_backup"));
+        return IsLaterBackup(candidateBackup, currentBackup);
+    }
+
+    private static bool RowHasSaveLocation(Dictionary<string, object?> row) =>
+        CatalogUserAdded.CoerceBool(row.GetValueOrDefault("save_in_registry_only"))
+        || !string.IsNullOrWhiteSpace(CatalogUserAdded.CoerceString(row.GetValueOrDefault("save_path")));
+
+    private static bool IsEmptyValue(object? value) =>
+        value is null
+        || value is string s && string.IsNullOrWhiteSpace(s);
+
+    private static string? LatestLastBackup(string? left, string? right)
+    {
+        if (string.IsNullOrWhiteSpace(left))
+        {
+            return right;
+        }
+
+        if (string.IsNullOrWhiteSpace(right))
+        {
+            return left;
+        }
+
+        return IsLaterBackup(right, left) ? right : left;
+    }
+
+    private static bool IsLaterBackup(string? candidate, string? current)
+    {
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(current))
+        {
+            return true;
+        }
+
+        if (!DateTimeOffset.TryParse(candidate, out var candidateTime))
+        {
+            return false;
+        }
+
+        return !DateTimeOffset.TryParse(current, out var currentTime)
+            || candidateTime > currentTime;
     }
 
     /// <summary>Resolves the catalog dictionary key for a game name (exact match first, then ordinal-ignore-case).</summary>
@@ -57,6 +233,7 @@ public sealed class SaveCatalogManager
     {
         lock (_lock)
         {
+            RefreshIfChangedUnsafe();
             return TryFindCatalogEntryWhileLocked(gameName, out canonicalKey, out row);
         }
     }
@@ -88,6 +265,8 @@ public sealed class SaveCatalogManager
     {
         lock (_lock)
         {
+            using var processLock = AcquireCatalogLock();
+            ReloadPrimaryUnsafe();
             if (!TryFindCatalogEntryWhileLocked(gameName, out _, out var row))
             {
                 return;
@@ -104,6 +283,8 @@ public sealed class SaveCatalogManager
     {
         lock (_lock)
         {
+            using var processLock = AcquireCatalogLock();
+            ReloadPrimaryUnsafe();
             var changed = false;
             foreach (var name in gameNames)
             {
@@ -131,6 +312,8 @@ public sealed class SaveCatalogManager
     {
         lock (_lock)
         {
+            using var processLock = AcquireCatalogLock();
+            ReloadPrimaryUnsafe();
             var changed = false;
             foreach (var kv in Catalog)
             {
@@ -152,6 +335,8 @@ public sealed class SaveCatalogManager
     {
         lock (_lock)
         {
+            using var processLock = AcquireCatalogLock();
+            ReloadPrimaryUnsafe();
             var removed = false;
             foreach (var name in names)
             {
@@ -199,7 +384,25 @@ public sealed class SaveCatalogManager
                 return;
             }
 
+            using var processLock = AcquireCatalogLock();
+            var disk = ReadPrimaryUnsafe();
+            foreach (var (key, row) in disk)
+            {
+                if (!Catalog.ContainsKey(key))
+                {
+                    Catalog[key] = row;
+                }
+            }
+
             PersistUnsafe();
+        }
+    }
+
+    public void RefreshFromDisk()
+    {
+        lock (_lock)
+        {
+            RefreshIfChangedUnsafe();
         }
     }
 
@@ -225,8 +428,7 @@ public sealed class SaveCatalogManager
 
             try
             {
-                var text = File.ReadAllText(c);
-                var parsed = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, object?>>>(text) ?? [];
+                var parsed = ReadCatalogFile(c);
                 if (!string.Equals(c, CatalogPath, StringComparison.OrdinalIgnoreCase))
                 {
                     Catalog = parsed;
@@ -250,6 +452,80 @@ public sealed class SaveCatalogManager
         Directory.CreateDirectory(Path.GetDirectoryName(CatalogPath)!);
         var json = JsonSerializer.Serialize(Catalog, new JsonSerializerOptions { WriteIndented = true });
         AtomicFileWrite.WriteAllText(CatalogPath, json);
+        AtomicFileWrite.WriteAllText(CatalogMetadataPath, JsonSerializer.Serialize(new
+        {
+            schemaVersion = 1,
+            writerVersion = AppVersionInfo.RawVersion,
+            updatedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
+        }));
         _dirty = false;
+        CaptureFileStampUnsafe();
+    }
+
+    private CrossProcessLock AcquireCatalogLock() =>
+        CrossProcessLock.Acquire("file:" + Path.GetFullPath(CatalogPath));
+
+    private void ReloadPrimaryUnsafe()
+    {
+        if (File.Exists(CatalogPath))
+        {
+            Catalog = ReadPrimaryUnsafe();
+            CaptureFileStampUnsafe();
+        }
+    }
+
+    private Dictionary<string, Dictionary<string, object?>> ReadPrimaryUnsafe()
+    {
+        try
+        {
+            return ReadCatalogFile(CatalogPath);
+        }
+        catch
+        {
+            var backup = CatalogPath + ".bak";
+            return File.Exists(backup) ? ReadCatalogFile(backup) : [];
+        }
+    }
+
+    private static Dictionary<string, Dictionary<string, object?>> ReadCatalogFile(string path)
+    {
+        var text = File.ReadAllText(path);
+        return JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, object?>>>(text) ?? [];
+    }
+
+    private void RefreshIfChangedUnsafe()
+    {
+        try
+        {
+            if (!File.Exists(CatalogPath))
+            {
+                return;
+            }
+
+            var info = new FileInfo(CatalogPath);
+            if (info.LastWriteTimeUtc != _loadedWriteUtc || info.Length != _loadedLength)
+            {
+                Catalog = ReadPrimaryUnsafe();
+                CaptureFileStampUnsafe();
+            }
+        }
+        catch
+        {
+            // Keep the last readable in-memory catalog snapshot.
+        }
+    }
+
+    private void CaptureFileStampUnsafe()
+    {
+        if (!File.Exists(CatalogPath))
+        {
+            _loadedWriteUtc = DateTime.MinValue;
+            _loadedLength = 0;
+            return;
+        }
+
+        var info = new FileInfo(CatalogPath);
+        _loadedWriteUtc = info.LastWriteTimeUtc;
+        _loadedLength = info.Length;
     }
 }

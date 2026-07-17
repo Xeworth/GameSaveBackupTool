@@ -28,7 +28,7 @@ public static class BackupRetentionVerifier
             return false;
         }
 
-        if (HasRetentionRunDirectory(baseDir, safe) || HasLegacyFlatRegExport(baseDir, safe))
+        if (HasRetentionRunDirectory(baseDir, safe, gameName) || HasLegacyFlatRegExport(baseDir, safe))
         {
             return true;
         }
@@ -94,7 +94,7 @@ public static class BackupRetentionVerifier
 
         string? best = null;
         var bestEff = DateTime.MinValue;
-        foreach (var dir in EnumerateNonEmptyRetentionRunDirectories(baseDir, safe))
+        foreach (var dir in EnumerateNonEmptyRetentionRunDirectories(baseDir, safe, gameName))
         {
             var eff = EffectiveUtcForRetentionRun(dir);
             if (eff > bestEff)
@@ -105,6 +105,29 @@ public static class BackupRetentionVerifier
         }
 
         return best;
+    }
+
+    public static IReadOnlyList<string> ListRetentionRunDirectories(
+        string backupRoot,
+        string gameName,
+        bool subfolderPerGame)
+    {
+        if (string.IsNullOrWhiteSpace(backupRoot) || !Directory.Exists(backupRoot))
+        {
+            return [];
+        }
+
+        var safe = GameNameInputValidation.SanitizeForWindowsPathSegment(
+            string.IsNullOrWhiteSpace(gameName) ? "Game" : gameName);
+        var baseDir = subfolderPerGame ? Path.Combine(backupRoot, safe) : backupRoot;
+        if (!Directory.Exists(baseDir))
+        {
+            return [];
+        }
+
+        return EnumerateNonEmptyRetentionRunDirectories(baseDir, safe, gameName)
+            .OrderByDescending(EffectiveUtcForRetentionRun)
+            .ToList();
     }
 
     private static DateTime EffectiveUtcForRetentionRun(string runDir)
@@ -145,7 +168,7 @@ public static class BackupRetentionVerifier
         }
 
         long sum = 0;
-        foreach (var dir in EnumerateNonEmptyRetentionRunDirectories(baseDir, safe))
+        foreach (var dir in EnumerateNonEmptyRetentionRunDirectories(baseDir, safe, gameName))
         {
             sum += BackupFolderSizeEstimator.ComputeDirectoryLogicalSize(dir);
         }
@@ -165,9 +188,9 @@ public static class BackupRetentionVerifier
         return sum;
     }
 
-    private static bool HasRetentionRunDirectory(string baseDir, string safe)
+    private static bool HasRetentionRunDirectory(string baseDir, string safe, string gameName)
     {
-        foreach (var dir in EnumerateNonEmptyRetentionRunDirectories(baseDir, safe))
+        foreach (var dir in EnumerateNonEmptyRetentionRunDirectories(baseDir, safe, gameName))
         {
             return true;
         }
@@ -185,19 +208,40 @@ public static class BackupRetentionVerifier
         return false;
     }
 
-    private static IEnumerable<string> EnumerateNonEmptyRetentionRunDirectories(string baseDir, string safe)
+    private static IEnumerable<string> EnumerateNonEmptyRetentionRunDirectories(
+        string baseDir,
+        string safe,
+        string gameName)
     {
         var prefix = $"{safe} - Backup";
-        foreach (var dir in Directory.EnumerateDirectories(baseDir))
+        var candidates = Directory.EnumerateDirectories(baseDir)
+            .Where(dir => Path.GetFileName(dir).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .Select(dir => new
+            {
+                Path = dir,
+                Manifest = BackupRunManifestStore.TryReadManifest(dir, out var manifest) ? manifest : null,
+            })
+            .ToList();
+        var hasDifferentOwner = candidates.Any(x =>
+            x.Manifest is not null
+            && !string.Equals(x.Manifest.GameName, gameName, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var candidate in candidates)
         {
-            if (!Path.GetFileName(dir).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            if (candidate.Manifest is not null
+                && !string.Equals(candidate.Manifest.GameName, gameName, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            if (RetentionRunContainsAtLeastOneFile(dir))
+            if (candidate.Manifest is null && hasDifferentOwner)
             {
-                yield return dir;
+                continue;
+            }
+
+            if (RetentionRunContainsAtLeastOneFile(candidate.Path))
+            {
+                yield return candidate.Path;
             }
         }
     }

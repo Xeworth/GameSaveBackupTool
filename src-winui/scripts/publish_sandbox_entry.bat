@@ -1,5 +1,5 @@
 @echo off
-rem Create gsbt-sandbox.exe (apphost copy + gsbt-s.ico) and gsbt-sandbox.pri beside gsbt.exe.
+rem Create gsbt-sandbox.exe (apphost copy + gsbt-s.ico) and gsbt-sandbox.pri beside gsbt-main.exe.
 rem Usage: publish_sandbox_entry.bat [publish-dir]
 setlocal EnableDelayedExpansion
 
@@ -11,8 +11,8 @@ if "%OUT%"=="" (
 
 set "SCRIPTS=%~dp0"
 set "RCEDIT=%SCRIPTS%tools\rcedit-x64.exe"
-set "MAIN_EXE=%OUT%\gsbt.exe"
-set "MAIN_PRI=%OUT%\gsbt.pri"
+set "MAIN_EXE=%OUT%\gsbt-main.exe"
+set "MAIN_PRI=%OUT%\gsbt-main.pri"
 set "SANDBOX_EXE=%OUT%\gsbt-sandbox.exe"
 set "SANDBOX_PRI=%OUT%\gsbt-sandbox.pri"
 set "SANDBOX_ICO=%OUT%\branding\gsbt-s.ico"
