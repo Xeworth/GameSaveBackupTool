@@ -13,5 +13,9 @@
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+    <!-- Allow the net*-windows projects (Core, Cli, Tests) to restore/build on
+         non-Windows hosts such as Linux Cloud dev agents and CI. Has no effect on
+         Windows, where release/installer builds continue to run unchanged. -->
+    <EnableWindowsTargeting Condition="!$([MSBuild]::IsOSPlatform('Windows'))">true</EnableWindowsTargeting>
   </PropertyGroup>
 </Project>
